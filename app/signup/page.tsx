@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
+import { toast } from "sonner";
 
 export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -29,7 +30,7 @@ export default function SignupPage() {
     agreeToTerms: false,
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (formData.password !== formData.confirmPassword) {
@@ -43,11 +44,45 @@ export default function SignupPage() {
     }
 
     // Handle signup logic here
-    console.log("Signup attempt:", formData);
+    const payload = {
+      email: formData.email,
+      password: formData.password,
+    };
+
+    const loadingToast = toast.loading("Creating your account...");
+
+    try {
+      const res = await fetch("/api/user/signup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      toast.dismiss(loadingToast);
+
+      if (res.status === 201) {
+        toast.success("Account created successfully!");
+        // Optionally redirect:
+        // router.push("/login");
+      } else if (res.status === 409) {
+        toast.error("User already exists with this email.");
+      } else if (res.status === 400) {
+        toast.error(data.error || "Invalid input.");
+      } else {
+        toast.error(data.error || "Something went wrong. Please try again.");
+      }
+    } catch (error) {
+      toast.dismiss(loadingToast);
+      console.error("Signup error:", error);
+      toast.error("Failed to connect to server.");
+    }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center py-12 px-4">
+    <div className="min-h-[90vh] flex items-center justify-center py-12 px-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">Create your account</CardTitle>
@@ -160,11 +195,11 @@ export default function SignupPage() {
               />
               <Label htmlFor="terms" className="text-sm">
                 I agree to the{" "}
-                <Link href="/terms" className="text-primary hover:underline">
+                <Link href="/terms" className="text-primary underline">
                   Terms of Service
                 </Link>{" "}
                 and{" "}
-                <Link href="/privacy" className="text-primary hover:underline">
+                <Link href="/privacy" className="text-primary underline">
                   Privacy Policy
                 </Link>
               </Label>
@@ -175,7 +210,7 @@ export default function SignupPage() {
             </Button>
           </form>
 
-          <div className="relative">
+          {/* <div className="relative">
             <div className="absolute inset-0 flex items-center">
               <Separator className="w-full" />
             </div>
@@ -184,9 +219,9 @@ export default function SignupPage() {
                 Or continue with
               </span>
             </div>
-          </div>
+          </div> */}
 
-          <Button variant="outline" className="w-full bg-transparent">
+          {/* <Button variant="outline" className="w-full bg-transparent">
             <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
               <path
                 d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -206,11 +241,11 @@ export default function SignupPage() {
               />
             </svg>
             Continue with Google
-          </Button>
+          </Button> */}
 
           <div className="text-center text-sm">
             Already have an account?{" "}
-            <Link href="/login" className="text-primary hover:underline">
+            <Link href="/login" className="text-primary underline">
               Sign in
             </Link>
           </div>

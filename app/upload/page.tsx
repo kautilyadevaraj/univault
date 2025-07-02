@@ -129,7 +129,7 @@ export default function UploadPage() {
   if (isSuccess) {
     return (
       <div className="min-h-screen py-8 px-4">
-        <div className="max-w-2xl mx-auto">
+        <div className="">
           <Card className="text-center">
             <CardHeader>
               <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
