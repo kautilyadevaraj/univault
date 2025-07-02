@@ -1,8 +1,9 @@
-// app/api/auth/login/route.ts
-
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+
+const JWT_SECRET = process.env.JWT_SECRET!;
 
 export async function POST(req: NextRequest) {
   const { email, password } = await req.json();
@@ -34,14 +35,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // You can later set cookies/session here for auth
-
-    return NextResponse.json({
-      success: true,
-      userId: user.id,
-      role: user.role,
+    // Sign JWT token
+    const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET, {
+      expiresIn: "7d",
     });
-  } catch (error) {
+
+    // Set cookie
+    const res = NextResponse.json({ success: true });
+    res.cookies.set("univault_token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+      path: "/",
+    });
+
+    return res; 
+  }
+  catch (error) {
     console.error("Login error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
