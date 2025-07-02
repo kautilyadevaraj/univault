@@ -30,7 +30,7 @@ export function Navbar() {
     { href: "/request", label: "Request" },
   ];
 
-  if (user?.role === "MEMBER") {
+  if (user?.role === "ADMIN") {
     navLinks.push({ href: "/admin", label: "Admin" });
   }
 
@@ -41,7 +41,6 @@ export function Navbar() {
       });
 
       if (res.ok) {
-        // Optionally redirect or update UI
         window.location.reload();
       } else {
         console.error("Logout failed");
