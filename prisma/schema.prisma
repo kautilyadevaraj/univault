@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -21,6 +15,12 @@ model Resource {
   fileUrl     String
   status      String   @default("PENDING")
   createdAt   DateTime @default(now())
+  school      String?
+  year        Int?                     
+  courseName  String?                 
+  resourceType String          
+  tags        String[]
+  user        User?    @relation(fields: [uploaderId], references: [id])            
 }
 
 model Request {
@@ -29,11 +29,23 @@ model Request {
   requesterId String?
   status      String   @default("PENDING")
   createdAt   DateTime @default(now())
+  email       String?
+  school      String
+  year        Int
+  courseName  String
+  resourceType String
+  tags        String[]
 }
 
 model User {
-  id       String @id @default(uuid())
-  email    String @unique
-  password String
-  role     String @default("MEMBER")
+  id             String   @id @default(uuid())
+  email          String   @unique
+  password       String
+  username       String   @unique
+  yearOfStudy    Int?
+  graduatingYear Int?
+  school         String?
+  course         String?
+  role           String   @default("MEMBER")
+  resources      Resource[]
 }

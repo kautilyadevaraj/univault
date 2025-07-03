@@ -3,11 +3,11 @@ import { db } from "@/lib/prisma";
 import bcrypt from "bcrypt";
 
 export async function POST(req: NextRequest) {
-  const { email, password } = await req.json();
+  const { email, password, username } = await req.json();
 
-  if (!email || !password) {
+  if (!email || !password || !username) {
     return NextResponse.json(
-      { error: "Email and password required" },
+      { error: "Email ,password and username required" },
       { status: 400 }
     );
   }
@@ -17,7 +17,15 @@ export async function POST(req: NextRequest) {
     const existingUser = await db.user.findUnique({ where: { email } });
     if (existingUser) {
       return NextResponse.json(
-        { error: "User already exists" },
+        { error: "User with this email already exists" },
+        { status: 409 }
+      );
+    }
+
+    const existingUserWithSameUsername = await db.user.findUnique({ where: { username } });
+    if (existingUserWithSameUsername) {
+      return NextResponse.json(
+        { error: "User with the same username already exists" },
         { status: 409 }
       );
     }
@@ -30,6 +38,7 @@ export async function POST(req: NextRequest) {
       data: {
         email,
         password: hashedPassword,
+        username
       },
     });
 

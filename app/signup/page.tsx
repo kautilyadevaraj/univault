@@ -15,11 +15,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 export default function SignupPage() {
+  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [formData, setFormData] = useState({
@@ -27,6 +28,7 @@ export default function SignupPage() {
     email: "",
     password: "",
     confirmPassword: "",
+    username: "",
     agreeToTerms: false,
   });
 
@@ -47,6 +49,7 @@ export default function SignupPage() {
     const payload = {
       email: formData.email,
       password: formData.password,
+      username: formData.username
     };
 
     const loadingToast = toast.loading("Creating your account...");
@@ -66,9 +69,9 @@ export default function SignupPage() {
       if (res.status === 201) {
         toast.success("Account created successfully!");
         // Optionally redirect:
-        // router.push("/login");
+        router.push("/login");
       } else if (res.status === 409) {
-        toast.error("User already exists with this email.");
+        toast.error(data.error || "User already exists.");
       } else if (res.status === 400) {
         toast.error(data.error || "Invalid input.");
       } else {
@@ -113,6 +116,20 @@ export default function SignupPage() {
                 value={formData.email}
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, email: e.target.value }))
+                }
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="username">Username</Label>
+              <Input
+                id="username"
+                type="text"
+                placeholder="Enter unique username"
+                value={formData.username}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, username: e.target.value }))
                 }
                 required
               />
