@@ -34,6 +34,10 @@ export function Navbar() {
     navLinks.push({ href: "/admin", label: "Admin" });
   }
 
+  if (user?.role === "ADMIN" || user?.role === "MEMBER") {
+    navLinks.push({ href: "/profile", label: "Profile" });
+  }
+
   const handleLogout = async () => {
     try {
       const res = await fetch("/api/auth/logout", {

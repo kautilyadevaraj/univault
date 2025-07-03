@@ -16,7 +16,9 @@ model Resource {
   status      String   @default("PENDING")
   createdAt   DateTime @default(now())
   school      String?
-  year        Int?                     
+  program     String?
+  yearOfCreation        Int?
+  courseYear Int?                     
   courseName  String?                 
   resourceType String          
   tags        String[]
@@ -31,7 +33,8 @@ model Request {
   createdAt   DateTime @default(now())
   email       String?
   school      String
-  year        Int
+  program     String?
+  courseYear Int
   courseName  String
   resourceType String
   tags        String[]
@@ -45,7 +48,7 @@ model User {
   yearOfStudy    Int?
   graduatingYear Int?
   school         String?
-  course         String?
+  program         String?
   role           String   @default("MEMBER")
   resources      Resource[]
 }

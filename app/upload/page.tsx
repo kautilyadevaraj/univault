@@ -1,9 +1,8 @@
 "use client";
 
 import type React from "react";
-
 import { useState } from "react";
-import { Upload, X, File, CheckCircle } from "lucide-react";
+import { Upload, X, File, CheckCircle, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,21 +16,84 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
+import Link from "next/link";
+
+// Mock session hook - replace with actual useSession from your auth provider
+function useSession() {
+  // This should be replaced with your actual session hook
+  return {
+    data: null, // Set to user object when logged in
+    status: "unauthenticated", // "loading" | "authenticated" | "unauthenticated"
+  };
+}
 
 interface UploadFormData {
   title: string;
   description: string;
+  school: string;
+  customSchool: string;
+  program: string;
+  yearOfCreation: string;
+  courseYear: string;
+  courseName: string;
+  resourceType: string;
   tags: string[];
   file: File | null;
+  uploadAnonymously: boolean;
 }
 
+const schools = [
+  { value: "SoCSE", label: "School of Computer Science & Engineering" },
+  { value: "SDI", label: "School of Design & Innovation" },
+  { value: "SoLAS", label: "School of Liberal Arts & Sciences" },
+  { value: "SoB", label: "School of Business" },
+  { value: "SoL", label: "School of Law" },
+  { value: "Others", label: "Others" },
+];
+
+const socsePrograms = ["B.Tech", "BCA", "BSc"];
+const resourceTypes = [
+  "Past Papers",
+  "Notes",
+  "Slides",
+  "Lab Manual",
+  "Project",
+  "Assignment",
+  "Study Guide",
+  "Other",
+];
+const courseYears = [
+  "1st Year",
+  "2nd Year",
+  "3rd Year",
+  "4th Year",
+  "5th Year",
+];
+
 export default function UploadPage() {
+  const { data: session, status } = useSession();
   const [formData, setFormData] = useState<UploadFormData>({
     title: "",
     description: "",
+    school: "",
+    customSchool: "",
+    program: "",
+    yearOfCreation: "",
+    courseYear: "",
+    courseName: "",
+    resourceType: "",
     tags: [],
     file: null,
+    uploadAnonymously: false,
   });
   const [tagInput, setTagInput] = useState("");
   const [isUploading, setIsUploading] = useState(false);
@@ -101,8 +163,28 @@ export default function UploadPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.title || !formData.file) {
+    // Check if user is logged in when not uploading anonymously
+    if (!formData.uploadAnonymously && !session) {
+      toast.error("Please log in to upload with your profile");
+      return;
+    }
+
+    // Validate required fields
+    if (
+      !formData.title ||
+      !formData.file ||
+      !formData.school ||
+      !formData.yearOfCreation ||
+      !formData.courseYear ||
+      !formData.courseName ||
+      !formData.resourceType
+    ) {
       toast.error("Please fill in all required fields");
+      return;
+    }
+
+    if (formData.school === "Others" && !formData.customSchool.trim()) {
+      toast.error("Please specify your school");
       return;
     }
 
@@ -126,10 +208,13 @@ export default function UploadPage() {
     }, 200);
   };
 
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 10 }, (_, i) => currentYear - i);
+
   if (isSuccess) {
     return (
       <div className="min-h-screen py-8 px-4">
-        <div className="">
+        <div className="max-w-2xl mx-auto">
           <Card className="text-center">
             <CardHeader>
               <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -148,6 +233,12 @@ export default function UploadPage() {
                   <p className="text-sm text-muted-foreground mb-2">
                     {formData.title}
                   </p>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    {formData.school === "Others"
+                      ? formData.customSchool
+                      : formData.school}{" "}
+                    - {formData.courseName}
+                  </p>
                   <div className="flex flex-wrap gap-1">
                     {formData.tags.map((tag) => (
                       <Badge key={tag} variant="secondary" className="text-xs">
@@ -163,15 +254,23 @@ export default function UploadPage() {
                       setFormData({
                         title: "",
                         description: "",
+                        school: "",
+                        customSchool: "",
+                        program: "",
+                        yearOfCreation: "",
+                        courseYear: "",
+                        courseName: "",
+                        resourceType: "",
                         tags: [],
                         file: null,
+                        uploadAnonymously: false,
                       });
                     }}
                   >
                     Upload Another
                   </Button>
                   <Button variant="outline" asChild>
-                    <a href="/">Back to Home</a>
+                    <Link href="/">Back to Home</Link>
                   </Button>
                 </div>
               </div>
@@ -202,6 +301,44 @@ export default function UploadPage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Upload Type Selection */}
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="uploadAnonymously"
+                    checked={formData.uploadAnonymously}
+                    onCheckedChange={(checked) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        uploadAnonymously: checked as boolean,
+                      }))
+                    }
+                  />
+                  <Label htmlFor="uploadAnonymously">Upload anonymously</Label>
+                </div>
+
+                {!formData.uploadAnonymously && !session && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <div className="flex items-center gap-2 text-yellow-800">
+                      <User className="h-4 w-4" />
+                      <span className="text-sm font-medium">
+                        Authentication Required
+                      </span>
+                    </div>
+                    <p className="text-sm text-yellow-700 mt-1">
+                      You need to be logged in to upload with your profile.{" "}
+                      <Link
+                        href="/login"
+                        className="underline hover:no-underline"
+                      >
+                        Login here
+                      </Link>{" "}
+                      or check "Upload anonymously" above.
+                    </p>
+                  </div>
+                )}
+              </div>
+
               {/* Title */}
               <div className="space-y-2">
                 <Label htmlFor="title">Resource Title *</Label>
@@ -233,6 +370,157 @@ export default function UploadPage() {
                 />
               </div>
 
+              {/* School */}
+              <div className="space-y-2">
+                <Label htmlFor="school">School *</Label>
+                <Select
+                  value={formData.school}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, school: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select your school" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {schools.map((school) => (
+                      <SelectItem key={school.value} value={school.value}>
+                        {school.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {formData.school === "Others" && (
+                  <Input
+                    placeholder="Please specify your school"
+                    value={formData.customSchool}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        customSchool: e.target.value,
+                      }))
+                    }
+                  />
+                )}
+              </div>
+
+              {/* Program */}
+              <div className="space-y-2">
+                <Label htmlFor="program">Program</Label>
+                {formData.school === "SoCSE" ? (
+                  <Select
+                    value={formData.program}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({ ...prev, program: value }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select your program" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {socsePrograms.map((program) => (
+                        <SelectItem key={program} value={program}>
+                          {program}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    placeholder="Enter your program (e.g., MBA, LLB, etc.)"
+                    value={formData.program}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        program: e.target.value,
+                      }))
+                    }
+                  />
+                )}
+              </div>
+
+              {/* Year of Creation */}
+              <div className="space-y-2">
+                <Label htmlFor="yearOfCreation">Year of Creation *</Label>
+                <Select
+                  value={formData.yearOfCreation}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, yearOfCreation: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select the year the resource was created" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {years.map((year) => (
+                      <SelectItem key={year} value={year.toString()}>
+                        {year}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Course Year */}
+              <div className="space-y-2">
+                <Label htmlFor="courseYear">Course Year *</Label>
+                <Select
+                  value={formData.courseYear}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, courseYear: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select the course year" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {courseYears.map((year) => (
+                      <SelectItem key={year} value={year}>
+                        {year}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Course Name */}
+              <div className="space-y-2">
+                <Label htmlFor="courseName">Course Name *</Label>
+                <Input
+                  id="courseName"
+                  placeholder="e.g., Data Structures, Object Oriented Programming with Java"
+                  value={formData.courseName}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      courseName: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+
+              {/* Resource Type */}
+              <div className="space-y-2">
+                <Label htmlFor="resourceType">Resource Type *</Label>
+                <Select
+                  value={formData.resourceType}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, resourceType: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select the type of resource" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {resourceTypes.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {type}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               {/* Tags */}
               <div className="space-y-2">
                 <Label>Tags</Label>
@@ -258,7 +546,6 @@ export default function UploadPage() {
                     </Button>
                   </div>
 
-                  {/* Selected Tags */}
                   {formData.tags.length > 0 && (
                     <div className="flex flex-wrap gap-2">
                       {formData.tags.map((tag) => (
@@ -277,7 +564,6 @@ export default function UploadPage() {
                     </div>
                   )}
 
-                  {/* Suggested Tags */}
                   <div>
                     <p className="text-sm text-muted-foreground mb-2">
                       Suggested tags:
@@ -374,7 +660,12 @@ export default function UploadPage() {
                 type="submit"
                 className="w-full"
                 size="lg"
-                disabled={isUploading || !formData.title || !formData.file}
+                disabled={
+                  isUploading ||
+                  !formData.title ||
+                  !formData.file ||
+                  (!formData.uploadAnonymously && !session)
+                }
               >
                 {isUploading ? "Uploading..." : "Upload for Approval"}
               </Button>
