@@ -2,7 +2,13 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/prisma";
 import { generateEmbedding } from "@/lib/gemini";
-import type { Resource } from "@/lib/gemini";
+import type { Resource } from "@/lib/generated/prisma";
+
+type ResourceWithUser = Resource & {
+  user: {
+    username: string;
+  } | null;
+};
 
 interface SemanticSearchResult {
   id: string;
@@ -70,7 +76,7 @@ export async function GET(request: Request) {
       `;
 
       // Format semantic search results
-      resources = semanticResults.map((r: any) => ({
+      resources = semanticResults.map((r: SemanticSearchResult) => ({
         id: r.id,
         title: r.title,
         description: r.description,
@@ -115,7 +121,7 @@ export async function GET(request: Request) {
         },
       });
 
-      resources = dbResources.map((r) => ({
+      resources = dbResources.map((r: ResourceWithUser) => ({
         id: r.id,
         title: r.title,
         description: r.description ?? "",
@@ -151,7 +157,7 @@ export async function GET(request: Request) {
         },
       });
 
-      resources = dbResources.map((r) => ({
+      resources = dbResources.map((r: ResourceWithUser) => ({
         id: r.id,
         title: r.title,
         description: r.description ?? "",
