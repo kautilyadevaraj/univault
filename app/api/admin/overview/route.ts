@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/prisma";
-import type { Resource, Request } from "@prisma/client";
+import type { Resource, Request } from "@/lib/generated/prisma";
 
 // Define types for the complex query results
 type ResourceWithUser = Resource & {
