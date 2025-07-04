@@ -15,6 +15,7 @@ import {
   RefreshCw,
   ArrowUpDown,
   BookOpen,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,6 +50,8 @@ import {
 } from "@/components/ui/pagination";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
@@ -70,6 +73,7 @@ interface SearchResult {
   courseYear: string;
   fileUrl: string;
   status: string;
+  similarity?: number;
 }
 
 // Skeleton Components
@@ -104,26 +108,6 @@ function SearchResultSkeleton() {
   );
 }
 
-function SearchHeaderSkeleton() {
-  return (
-    <div className="mb-8">
-      <div className="flex flex-col sm:flex-row gap-2 mb-6">
-        <Skeleton className="h-12 flex-1" />
-        <Skeleton className="h-12 w-24" />
-      </div>
-      <div className="flex flex-wrap gap-2 mb-4">
-        {Array.from({ length: 8 }).map((_, i) => (
-          <Skeleton key={i} className="h-6 w-20" />
-        ))}
-      </div>
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <Skeleton className="h-4 w-32" />
-        <Skeleton className="h-10 w-full sm:w-40" />
-      </div>
-    </div>
-  );
-}
-
 export default function SearchPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -139,21 +123,43 @@ export default function SearchPage() {
     null
   );
   const [showFilters, setShowFilters] = useState(false);
+  const [useSmartSearch, setUseSmartSearch] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
 
-  // Debounce search query
+  // Improved debouncing with longer delay for better UX
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedQuery(searchQuery);
-    }, 300);
+    }, 800); // Increased from 300ms to 800ms
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  // Build search URL with parameters
+  const searchUrl = useMemo(() => {
+    const params = new URLSearchParams();
+    if (debouncedQuery.trim()) {
+      params.set("q", debouncedQuery.trim());
+    }
+    if (useSmartSearch && debouncedQuery.trim()) {
+      params.set("semantic", "true");
+    }
+    return `/api/search?${params.toString()}`;
+  }, [debouncedQuery, useSmartSearch]);
 
   const {
     data: searchResults,
     error,
     isLoading,
     mutate,
-  } = useSWR<SearchResult[]>("/api/search", fetcher);
+  } = useSWR<SearchResult[]>(searchUrl, fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 1000, // Prevent duplicate requests within 1 second
+  });
+
+  // Set searching state based on SWR loading
+  useEffect(() => {
+    setIsSearching(isLoading);
+  }, [isLoading]);
 
   const filterOptions = [
     "Computer Science",
@@ -174,18 +180,6 @@ export default function SearchPage() {
     if (!searchResults) return [];
 
     let filtered = searchResults;
-
-    // Apply search query filter
-    if (debouncedQuery.trim()) {
-      const query = debouncedQuery.toLowerCase();
-      filtered = filtered.filter(
-        (result) =>
-          result.title.toLowerCase().includes(query) ||
-          result.description.toLowerCase().includes(query) ||
-          result.courseName.toLowerCase().includes(query) ||
-          result.tags.some((tag) => tag.toLowerCase().includes(query))
-      );
-    }
 
     // Apply selected filters
     if (selectedFilters.length > 0) {
@@ -215,13 +209,18 @@ export default function SearchPage() {
       case "title":
         filtered.sort((a, b) => a.title.localeCompare(b.title));
         break;
+      case "similarity":
+        if (useSmartSearch) {
+          filtered.sort((a, b) => (b.similarity || 0) - (a.similarity || 0));
+        }
+        break;
       default:
         // Keep original order for relevance
         break;
     }
 
     return filtered;
-  }, [searchResults, debouncedQuery, selectedFilters, sortBy]);
+  }, [searchResults, selectedFilters, sortBy, useSmartSearch]);
 
   const toggleFilter = (filter: string) => {
     setSelectedFilters((prev) =>
@@ -326,126 +325,179 @@ export default function SearchPage() {
   return (
     <div className="min-h-screen py-8 px-4">
       <div className="max-w-6xl mx-auto">
-        {/* Search Header */}
-        {isLoading ? (
-          <SearchHeaderSkeleton />
-        ) : (
-          <div className="mb-8">
-            <div className="flex flex-col sm:flex-row gap-2 mb-6">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                <Input
-                  type="search"
-                  placeholder="Search for resources..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 h-12"
+        {/* Search Header - Always visible */}
+        <div className="mb-8">
+          <div className="flex flex-col sm:flex-row gap-2 mb-6">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+              <Input
+                type="search"
+                placeholder="Search for resources..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 h-12"
+                disabled={isSearching}
+              />
+              {searchQuery && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setDebouncedQuery("");
+                  }}
+                  disabled={isSearching}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="lg"
+                className="h-12 bg-transparent"
+                onClick={() => setShowFilters(!showFilters)}
+                disabled={isSearching}
+              >
+                <Filter className="h-4 w-4 mr-2" />
+                Filters
+                {selectedFilters.length > 0 && (
+                  <Badge variant="secondary" className="ml-2">
+                    {selectedFilters.length}
+                  </Badge>
+                )}
+              </Button>
+              <Button
+                onClick={handleRefresh}
+                variant="outline"
+                size="lg"
+                className="h-12 bg-transparent"
+                disabled={isSearching}
+              >
+                <RefreshCw
+                  className={`h-4 w-4 ${isSearching ? "animate-spin" : ""}`}
                 />
-                {searchQuery && (
+              </Button>
+            </div>
+          </div>
+
+          {/* Smart Search Toggle */}
+          <div className="flex items-center space-x-2 mb-4">
+            <Switch
+              id="smart-search"
+              checked={useSmartSearch}
+              onCheckedChange={setUseSmartSearch}
+              disabled={isSearching}
+            />
+            <Label htmlFor="smart-search" className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-purple-500" />
+              Smart Search (AI-powered semantic search)
+            </Label>
+            {useSmartSearch && (
+              <Badge
+                variant="outline"
+                className="text-purple-600 border-purple-300"
+              >
+                AI
+              </Badge>
+            )}
+          </div>
+
+          {/* Filters */}
+          {(showFilters || selectedFilters.length > 0) && (
+            <div className="mb-4 p-4 border rounded-lg bg-muted/30">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="font-medium">Filters</h3>
+                {selectedFilters.length > 0 && (
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0"
-                    onClick={() => {
-                      setSearchQuery("");
-                      setDebouncedQuery("");
-                    }}
+                    onClick={clearAllFilters}
+                    disabled={isSearching}
                   >
-                    <X className="h-4 w-4" />
+                    Clear all
                   </Button>
                 )}
               </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="lg"
-                  className="h-12 bg-transparent"
-                  onClick={() => setShowFilters(!showFilters)}
-                >
-                  <Filter className="h-4 w-4 mr-2" />
-                  Filters
-                  {selectedFilters.length > 0 && (
-                    <Badge variant="secondary" className="ml-2">
-                      {selectedFilters.length}
-                    </Badge>
-                  )}
-                </Button>
-                <Button
-                  onClick={handleRefresh}
-                  variant="outline"
-                  size="lg"
-                  className="h-12 bg-transparent"
-                >
-                  <RefreshCw className="h-4 w-4" />
-                </Button>
+              <div className="flex flex-wrap gap-2">
+                {filterOptions.map((filter) => (
+                  <Badge
+                    key={filter}
+                    variant={
+                      selectedFilters.includes(filter) ? "default" : "outline"
+                    }
+                    className={`cursor-pointer hover:bg-primary/10 transition-colors ${
+                      isSearching ? "opacity-50 cursor-not-allowed" : ""
+                    }`}
+                    onClick={() => !isSearching && toggleFilter(filter)}
+                  >
+                    {filter}
+                    {selectedFilters.includes(filter) && (
+                      <X className="h-3 w-3 ml-1" />
+                    )}
+                  </Badge>
+                ))}
               </div>
             </div>
+          )}
 
-            {/* Filters */}
-            {(showFilters || selectedFilters.length > 0) && (
-              <div className="mb-4 p-4 border rounded-lg bg-muted/30">
-                <div className="flex justify-between items-center mb-3">
-                  <h3 className="font-medium">Filters</h3>
-                  {selectedFilters.length > 0 && (
-                    <Button variant="ghost" size="sm" onClick={clearAllFilters}>
-                      Clear all
-                    </Button>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {filterOptions.map((filter) => (
-                    <Badge
-                      key={filter}
-                      variant={
-                        selectedFilters.includes(filter) ? "default" : "outline"
-                      }
-                      className="cursor-pointer hover:bg-primary/10 transition-colors"
-                      onClick={() => toggleFilter(filter)}
-                    >
-                      {filter}
-                      {selectedFilters.includes(filter) && (
-                        <X className="h-3 w-3 ml-1" />
-                      )}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Sort Control */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <div className="flex items-center gap-4">
-                <p className="text-muted-foreground">
-                  Showing {filteredAndSortedResults.length} of{" "}
-                  {searchResults?.length || 0} results
-                </p>
-                {(debouncedQuery || selectedFilters.length > 0) && (
+          {/* Sort Control */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="flex items-center gap-4">
+              <p className="text-muted-foreground">
+                {isSearching ? (
+                  "Searching..."
+                ) : (
+                  <>
+                    Showing {filteredAndSortedResults.length} of{" "}
+                    {searchResults?.length || 0} results
+                    {useSmartSearch && debouncedQuery && (
+                      <Badge
+                        variant="outline"
+                        className="ml-2 text-purple-600 border-purple-300"
+                      >
+                        AI Search
+                      </Badge>
+                    )}
+                  </>
+                )}
+              </p>
+              {(debouncedQuery || selectedFilters.length > 0) &&
+                !isSearching && (
                   <Button variant="ghost" size="sm" onClick={clearAllFilters}>
                     <X className="h-4 w-4 mr-1" />
                     Clear search
                   </Button>
                 )}
-              </div>
-              <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger className="w-full sm:w-[180px]">
-                  <ArrowUpDown className="h-4 w-4 mr-2" />
-                  <SelectValue placeholder="Sort by" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="relevance">Relevance</SelectItem>
-                  <SelectItem value="date">Upload Date</SelectItem>
-                  <SelectItem value="downloads">Most Downloaded</SelectItem>
-                  <SelectItem value="title">Title A-Z</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
+            <Select
+              value={sortBy}
+              onValueChange={setSortBy}
+              disabled={isSearching}
+            >
+              <SelectTrigger className="w-full sm:w-[180px]">
+                <ArrowUpDown className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="relevance">Relevance</SelectItem>
+                {useSmartSearch && (
+                  <SelectItem value="similarity">AI Similarity</SelectItem>
+                )}
+                <SelectItem value="date">Upload Date</SelectItem>
+                <SelectItem value="downloads">Most Downloaded</SelectItem>
+                <SelectItem value="title">Title A-Z</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-        )}
+        </div>
 
-        {/* Results */}
+        {/* Results - Only this section shows loading */}
         <div className="space-y-4 mb-8">
-          {isLoading ? (
-            // Loading skeletons
+          {isSearching ? (
+            // Loading skeletons - only for results
             Array.from({ length: 5 }).map((_, i) => (
               <SearchResultSkeleton key={i} />
             ))
@@ -459,13 +511,23 @@ export default function SearchPage() {
                 <CardTitle className="mb-2">No resources found</CardTitle>
                 <CardDescription className="mb-4">
                   {debouncedQuery || selectedFilters.length > 0
-                    ? "Try adjusting your search terms or filters"
+                    ? useSmartSearch
+                      ? "Try adjusting your search terms, disabling AI search, or clearing filters"
+                      : "Try adjusting your search terms, enabling AI search, or clearing filters"
                     : "No resources are available at the moment"}
                 </CardDescription>
                 {(debouncedQuery || selectedFilters.length > 0) && (
-                  <Button variant="outline" onClick={clearAllFilters}>
-                    Clear search and filters
-                  </Button>
+                  <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                    <Button variant="outline" onClick={clearAllFilters}>
+                      Clear search and filters
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setUseSmartSearch(!useSmartSearch)}
+                    >
+                      {useSmartSearch ? "Try Regular Search" : "Try AI Search"}
+                    </Button>
+                  </div>
                 )}
               </CardHeader>
             </Card>
@@ -479,9 +541,19 @@ export default function SearchPage() {
                 <CardHeader>
                   <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-4">
                     <div className="flex-1">
-                      <CardTitle className="text-lg mb-2">
-                        {result.title}
-                      </CardTitle>
+                      <div className="flex items-center gap-2 mb-2">
+                        <CardTitle className="text-lg">
+                          {result.title}
+                        </CardTitle>
+                        {useSmartSearch && result.similarity && (
+                          <Badge
+                            variant="outline"
+                            className="text-purple-600 border-purple-300 text-xs"
+                          >
+                            {Math.round(result.similarity * 100)}% match
+                          </Badge>
+                        )}
+                      </div>
                       <CardDescription className="text-base mb-3">
                         {result.description}
                       </CardDescription>
@@ -674,7 +746,7 @@ export default function SearchPage() {
         </Dialog>
 
         {/* Pagination */}
-        {!isLoading && filteredAndSortedResults.length > 0 && (
+        {!isSearching && filteredAndSortedResults.length > 0 && (
           <div className="flex justify-center">
             <Pagination>
               <PaginationContent>

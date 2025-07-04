@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  output   = "../lib/generated/prisma"
 }
 
 datasource db {
@@ -8,22 +9,25 @@ datasource db {
 }
 
 model Resource {
-  id              String   @id @default(uuid())
+  id              String                 @id @default(uuid())
   title           String
   description     String?
   uploaderId      String?
   fileUrl         String
-  status          String   @default("PENDING")
-  createdAt       DateTime @default(now())
-  school          String?
-  program         String?
-  yearOfCreation  Int?
-  courseYear      Int?
+  status          String                 @default("PENDING")
+  createdAt       DateTime               @default(now())
   courseName      String?
-  resourceType    String
-  tags            String[]
+  courseYear      Int?
   linkedRequestId String?
-  user            User?    @relation(fields: [uploaderId], references: [id])
+  program         String?
+  resourceType    String
+  school          String?
+  tags            String[]
+  yearOfCreation  Int?
+  embedding       Unsupported("vector")?
+  user            User?                  @relation(fields: [uploaderId], references: [id])
+
+  @@index([embedding])
 }
 
 model Request {
@@ -32,12 +36,12 @@ model Request {
   requesterId  String?
   status       String   @default("PENDING")
   createdAt    DateTime @default(now())
-  email        String?
-  school       String
-  program      String?
-  courseYear   Int
   courseName   String
+  courseYear   Int
+  email        String?
+  program      String?
   resourceType String
+  school       String
   tags         String[]
 }
 
@@ -45,12 +49,12 @@ model User {
   id             String     @id @default(uuid())
   email          String     @unique
   password       String
+  role           String     @default("MEMBER")
+  createdAt      DateTime   @default(now())
+  graduatingYear Int?
+  program        String?
+  school         String?
   username       String     @unique
   yearOfStudy    Int?
-  graduatingYear Int?
-  school         String?
-  program        String?
-  role           String     @default("MEMBER")
   resources      Resource[]
-  createdAt       DateTime @default(now())
 }

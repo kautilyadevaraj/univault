@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 import { randomUUID } from "crypto";
+import { generateEmbedding, createResourceText } from "@/lib/gemini";
+import type { Resource } from "@/lib/generated/prisma";
 
 const s3 = new S3Client({
   region: process.env.B2_REGION,
@@ -76,6 +78,39 @@ export async function POST(req: NextRequest) {
       })
     );
 
+    let embedding: number[] | null = null;
+    try {
+      const resourceData: Resource = {
+        title,
+        description,
+        school,
+        program,
+        yearOfCreation,
+        courseYear,
+        courseName,
+        resourceType,
+        tags,
+        linkedRequestId,
+        status : "PENDING",
+        uploaderId,
+        fileUrl: key,
+        createdAt: new Date(),
+        id: randomUUID(),
+      };
+
+      const resourceText = createResourceText(resourceData);
+      console.log(`Generating embedding for resource: ${title}`);
+      console.log(`Resource text: ${resourceText.substring(0, 100)}...`);
+
+      embedding = await generateEmbedding(resourceText);
+      console.log(`✓ Successfully generated embedding for: ${title}`);
+    } catch (embeddingError) {
+      console.error(
+        `✗ Failed to generate embedding for ${title}:`,
+        embeddingError
+      );
+    }
+
     // create DB entry with status "PENDING"
     const resource = await prisma.resource.create({
       data: {
@@ -94,6 +129,14 @@ export async function POST(req: NextRequest) {
         uploaderId,
       },
     });
+
+    if (embedding) {
+      await prisma.$executeRaw`
+        UPDATE "Resource" 
+        SET embedding = ${JSON.stringify(embedding)}::vector 
+        WHERE id = ${resource.id}
+      `;
+    }
 
     return NextResponse.json(resource, { status: 201 });
   } catch (error) {
