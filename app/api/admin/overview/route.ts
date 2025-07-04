@@ -1,5 +1,21 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/prisma";
+import type { Resource, User, Request } from "@prisma/client";
+
+// Define types for the complex query results
+type ResourceWithUser = Resource & {
+  user: {
+    username: string;
+  } | null;
+};
+
+type UserSelect = {
+  id: string;
+  username: string;
+  email: string;
+  role: string;
+  createdAt: Date;
+};
 
 export async function GET() {
   try {
@@ -14,7 +30,7 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
     });
 
-    const pendingUploads = pendingUploadsRaw.map((u) => ({
+    const pendingUploads = pendingUploadsRaw.map((u: ResourceWithUser) => ({
       id: u.id,
       title: u.title,
       description: u.description ?? "",
@@ -39,7 +55,7 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
     });
 
-    const pendingRequests = pendingRequestsRaw.map((r) => ({
+    const pendingRequests = pendingRequestsRaw.map((r: Request) => ({
       id: r.id,
       request: r.queryText,
       requester: r.email ?? "Anonymous",
@@ -63,7 +79,7 @@ export async function GET() {
 
     // For each user, count resources and requests
     const users = await Promise.all(
-      usersRaw.map(async (u) => {
+      usersRaw.map(async (u: UserSelect) => {
         const uploadsCount = await db.resource.count({
           where: { uploaderId: u.id },
         });
