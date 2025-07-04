@@ -43,7 +43,7 @@ import Link from "next/link";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
 import { toast } from "sonner";
-import type { Resource } from "@prisma/client";
+import type { Resource } from "@/lib/generated/prisma";
 
 const schoolNames = {
   SoCSE: "School of Computer Science & Engineering",
