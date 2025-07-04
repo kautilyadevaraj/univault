@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { Check, X, Upload, MessageSquare, Users, Eye } from "lucide-react";
+import useSWR from "swr";
+import { fetcher } from "@/lib/fetcher";
+import { useState, useEffect } from "react";
+import { Upload, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -12,175 +14,397 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
-interface PendingUpload {
-  id: string;
+// Import our new components
+import { StatsCards } from "@/components/admin/stats-cards";
+import {
+  UploadCard,
+  UploadCardSkeleton,
+  type PendingUpload,
+} from "@/components/admin/upload-card";
+import {
+  RequestCard,
+  RequestCardSkeleton,
+  type PendingRequest,
+} from "@/components/admin/request-card";
+import { UsersTable, type User } from "@/components/admin/users-table";
+import { EditUploadDialog } from "@/components/admin/edit-upload-dialog";
+import { EditRequestDialog } from "@/components/admin/edit-request-dialog";
+
+interface AdminData {
+  uploads: PendingUpload[];
+  requests: PendingRequest[];
+  users: User[];
+}
+
+interface PendingUploadEdit {
+  uploadId: string;
   title: string;
   description: string;
-  uploader: string;
-  uploadDate: string;
-  fileType: string;
+  school: string;
+  customSchool: string;
+  program: string;
+  yearOfCreation: string;
+  courseYear: string;
+  courseName: string;
+  resourceType: string;
   tags: string[];
-  status: "pending" | "approved" | "rejected";
+  file?: File;
 }
-
-interface PendingRequest {
-  id: string;
-  request: string;
-  requester: string;
-  requestDate: string;
-  status: "open" | "fulfilled";
-}
-
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: "member" | "admin";
-  joinDate: string;
-  uploads: number;
-  requests: number;
-}
-
-const mockUploads: PendingUpload[] = [
-  {
-    id: "1",
-    title: "Advanced Algorithms Final 2023",
-    description:
-      "Complete final exam with detailed solutions covering dynamic programming, graph algorithms, and complexity analysis.",
-    uploader: "Alice Johnson",
-    uploadDate: "2024-01-15",
-    fileType: "PDF",
-    tags: ["Algorithms", "Final", "2023", "Computer Science"],
-    status: "pending",
-  },
-  {
-    id: "2",
-    title: "Organic Chemistry Lab Manual",
-    description:
-      "Laboratory procedures and safety guidelines for organic chemistry experiments.",
-    uploader: "Bob Smith",
-    uploadDate: "2024-01-14",
-    fileType: "PDF",
-    tags: ["Chemistry", "Lab", "Manual", "Organic"],
-    status: "pending",
-  },
-];
-
-const mockRequests: PendingRequest[] = [
-  {
-    id: "1",
-    request: "Linear Algebra Midterm 2023 with solutions",
-    requester: "Sarah Chen",
-    requestDate: "2024-01-16",
-    status: "open",
-  },
-  {
-    id: "2",
-    request: "Database Systems Project Examples",
-    requester: "Anonymous",
-    requestDate: "2024-01-15",
-    status: "open",
-  },
-];
-
-const mockUsers: User[] = [
-  {
-    id: "1",
-    name: "Alice Johnson",
-    email: "alice@university.edu",
-    role: "member",
-    joinDate: "2023-09-01",
-    uploads: 12,
-    requests: 3,
-  },
-  {
-    id: "2",
-    name: "Bob Smith",
-    email: "bob@university.edu",
-    role: "admin",
-    joinDate: "2023-08-15",
-    uploads: 25,
-    requests: 1,
-  },
-];
 
 export default function AdminPage() {
-  const [uploads, setUploads] = useState(mockUploads);
-  const [requests, setRequests] = useState(mockRequests);
-  const [users, setUsers] = useState(mockUsers);
-  const [fulfillmentFile, setFulfillmentFile] = useState<File | null>(null);
+  const [uploads, setUploads] = useState<PendingUpload[]>([]);
+  const [requests, setRequests] = useState<PendingRequest[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [editingUpload, setEditingUpload] = useState<PendingUpload | null>(
+    null
+  );
+  const [editingRequest, setEditingRequest] = useState<PendingRequest | null>(
+    null
+  );
+  const [isEditUploadDialogOpen, setIsEditUploadDialogOpen] = useState(false);
+  const [isEditRequestDialogOpen, setIsEditRequestDialogOpen] = useState(false);
 
-  const handleApproveUpload = (id: string) => {
-    setUploads((prev) =>
-      prev.map((upload) =>
-        upload.id === id ? { ...upload, status: "approved" as const } : upload
-      )
-    );
-    toast.success("Upload approved successfully");
-  };
+  // Store pending edits for uploads - only applied when approved
+  const [pendingUploadEdits, setPendingUploadEdits] = useState<
+    Record<string, PendingUploadEdit>
+  >({});
 
-  const handleRejectUpload = (id: string) => {
-    setUploads((prev) =>
-      prev.map((upload) =>
-        upload.id === id ? { ...upload, status: "rejected" as const } : upload
-      )
-    );
-    toast.success("Upload rejected");
-  };
+  const { data, error, isLoading, mutate } = useSWR<AdminData>(
+    "/api/admin/overview",
+    fetcher
+  );
 
-  const handleFulfillRequest = (id: string) => {
-    if (!fulfillmentFile) {
-      toast.error("Please select a file to fulfill the request");
-      return;
+  // Update local state when data is fetched
+  useEffect(() => {
+    if (data) {
+      setUploads(data.uploads || []);
+      setRequests(data.requests || []);
+      setUsers(data.users || []);
     }
+  }, [data]);
 
-    setRequests((prev) =>
-      prev.map((request) =>
-        request.id === id
-          ? { ...request, status: "fulfilled" as const }
-          : request
-      )
-    );
-    setFulfillmentFile(null);
-    toast.success("Request fulfilled successfully");
+  const handleApproveUpload = async (id: string) => {
+    setActionLoading(`approve-${id}`);
+    try {
+      let response;
+
+      // Check if we have pending edits for this upload
+      const pendingEdit = pendingUploadEdits[id];
+
+      if (pendingEdit) {
+        // Approve with edits
+        const formData = new FormData();
+        formData.append("title", pendingEdit.title);
+        formData.append("description", pendingEdit.description);
+        formData.append(
+          "school",
+          pendingEdit.school === "Others"
+            ? pendingEdit.customSchool
+            : pendingEdit.school
+        );
+        formData.append("program", pendingEdit.program);
+        formData.append("yearOfCreation", pendingEdit.yearOfCreation);
+        formData.append("courseYear", pendingEdit.courseYear);
+        formData.append("courseName", pendingEdit.courseName);
+        formData.append("resourceType", pendingEdit.resourceType);
+        formData.append("tags", JSON.stringify(pendingEdit.tags));
+
+        if (pendingEdit.file) {
+          formData.append("file", pendingEdit.file);
+        }
+
+        response = await fetch(`/api/admin/uploads/${id}/approve`, {
+          method: "POST",
+          body: formData,
+        });
+
+        // Clear pending edit after successful approval
+        setPendingUploadEdits((prev) => {
+          const newEdits = { ...prev };
+          delete newEdits[id];
+          return newEdits;
+        });
+      } else {
+        // Simple approval without edits
+        response = await fetch(`/api/admin/uploads/${id}/approve`, {
+          method: "POST",
+        });
+      }
+
+      if (!response.ok) {
+        throw new Error("Failed to approve upload");
+      }
+
+      setUploads((prev) =>
+        prev.map((upload) =>
+          upload.id === id ? { ...upload, status: "approved" as const } : upload
+        )
+      );
+      toast.success("Upload approved successfully");
+      mutate();
+    } catch (error) {
+      toast.error("Failed to approve upload");
+      console.error("Error approving upload:", error);
+    } finally {
+      setActionLoading(null);
+    }
   };
 
-  const handleToggleUserRole = (id: string) => {
-    setUsers((prev) =>
-      prev.map((user) =>
-        user.id === id
+  const handleRejectUpload = async (id: string) => {
+    setActionLoading(`reject-${id}`);
+    try {
+      const response = await fetch(`/api/admin/uploads/${id}/reject`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to reject upload");
+      }
+
+      // Clear any pending edits for this upload
+      setPendingUploadEdits((prev) => {
+        const newEdits = { ...prev };
+        delete newEdits[id];
+        return newEdits;
+      });
+
+      setUploads((prev) =>
+        prev.map((upload) =>
+          upload.id === id ? { ...upload, status: "rejected" as const } : upload
+        )
+      );
+      toast.success("Upload rejected");
+      mutate();
+    } catch (error) {
+      toast.error("Failed to reject upload");
+      console.error("Error rejecting upload:", error);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleFulfillRequest = async (id: string, file: File) => {
+    setActionLoading(`fulfill-${id}`);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch(`/api/admin/requests/${id}/fulfill`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fulfill request");
+      }
+
+      setRequests((prev) =>
+        prev.map((request) =>
+          request.id === id
+            ? { ...request, status: "fulfilled" as const }
+            : request
+        )
+      );
+      toast.success("Request fulfilled successfully");
+      mutate();
+    } catch (error) {
+      toast.error("Failed to fulfill request");
+      console.error("Error fulfilling request:", error);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleToggleUserRole = async (id: string) => {
+    setActionLoading(`role-${id}`);
+    try {
+      const user = users.find((u) => u.id === id);
+      if (!user) return;
+
+      const newRole = user.role === "admin" ? "member" : "admin";
+
+      const response = await fetch(`/api/admin/users/${id}/role`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ role: newRole }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update user role");
+      }
+
+      setUsers((prev) =>
+        prev.map((user) =>
+          user.id === id
+            ? { ...user, role: newRole as "admin" | "member" }
+            : user
+        )
+      );
+      toast.success("User role updated");
+      mutate();
+    } catch (error) {
+      toast.error("Failed to update user role");
+      console.error("Error updating user role:", error);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleEditUpload = (upload: PendingUpload) => {
+    setEditingUpload(upload);
+    setIsEditUploadDialogOpen(true);
+  };
+
+  const handleEditRequest = (request: PendingRequest) => {
+    setEditingRequest(request);
+    setIsEditRequestDialogOpen(true);
+  };
+
+  // Updated to only store edits in state, not call API
+  const handleSaveUploadEdits = async (editData: any) => {
+    if (!editingUpload) return;
+
+    // Store the edits in state instead of calling API
+    setPendingUploadEdits((prev) => ({
+      ...prev,
+      [editingUpload.id]: {
+        uploadId: editingUpload.id,
+        ...editData,
+      },
+    }));
+
+    // Update the local upload display with edited data
+    setUploads((prev) =>
+      prev.map((upload) =>
+        upload.id === editingUpload.id
           ? {
-              ...user,
-              role:
-                user.role === "admin"
-                  ? ("member" as const)
-                  : ("admin" as const),
+              ...upload,
+              title: editData.title,
+              description: editData.description,
+              school:
+                editData.school === "Others"
+                  ? editData.customSchool
+                  : editData.school,
+              program: editData.program,
+              yearOfCreation: Number.parseInt(editData.yearOfCreation),
+              courseYear: editData.courseYear,
+              courseName: editData.courseName,
+              resourceType: editData.resourceType,
+              tags: editData.tags,
             }
-          : user
+          : upload
       )
     );
-    toast.success("User role updated");
+
+    setIsEditUploadDialogOpen(false);
+    setEditingUpload(null);
+    toast.success("Changes saved! Click 'Approve' to apply them.");
   };
+
+  const handleUpdateRequest = async (editData: any) => {
+    if (!editingRequest) return;
+
+    setActionLoading(`update-request-${editingRequest.id}`);
+    try {
+      const response = await fetch(`/api/admin/requests/${editingRequest.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          queryText: editData.queryText,
+          school:
+            editData.school === "Others"
+              ? editData.customSchool
+              : editData.school,
+          program: editData.program,
+          yearOfCreation: Number.parseInt(editData.yearOfCreation),
+          courseYear: editData.courseYear,
+          courseName: editData.courseName,
+          resourceType: editData.resourceType,
+          tags: editData.tags,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update request");
+      }
+
+      const updatedRequest = await response.json();
+      setRequests((prev) =>
+        prev.map((request) =>
+          request.id === editingRequest.id
+            ? { ...request, ...updatedRequest }
+            : request
+        )
+      );
+
+      setIsEditRequestDialogOpen(false);
+      setEditingRequest(null);
+      toast.success("Request updated successfully");
+      mutate();
+    } catch (error) {
+      toast.error("Failed to update request");
+      console.error("Error updating request:", error);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Helper function to get display data for upload (with pending edits applied)
+  const getUploadDisplayData = (upload: PendingUpload) => {
+    const pendingEdit = pendingUploadEdits[upload.id];
+    if (!pendingEdit) return upload;
+
+    return {
+      ...upload,
+      title: pendingEdit.title,
+      description: pendingEdit.description,
+      school:
+        pendingEdit.school === "Others"
+          ? pendingEdit.customSchool
+          : pendingEdit.school,
+      program: pendingEdit.program,
+      yearOfCreation: Number.parseInt(pendingEdit.yearOfCreation),
+      courseYear: pendingEdit.courseYear,
+      courseName: pendingEdit.courseName,
+      resourceType: pendingEdit.resourceType,
+      tags: pendingEdit.tags,
+    };
+  };
+
+  // Helper function to check if upload has pending edits
+  const hasUploadPendingEdits = (uploadId: string) => {
+    return !!pendingUploadEdits[uploadId];
+  };
+
+  if (error) {
+    return (
+      <div className="min-h-screen py-8 px-4">
+        <div className="max-w-7xl mx-auto">
+          <Card className="text-center py-12">
+            <CardHeader>
+              <CardTitle className="text-red-600 mb-4">
+                Failed to load admin data
+              </CardTitle>
+              <CardDescription className="mb-6">
+                There was an error loading the admin dashboard. Please try
+                refreshing the page.
+              </CardDescription>
+              <Button onClick={() => mutate()} variant="outline">
+                Try Again
+              </Button>
+            </CardHeader>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   const pendingUploads = uploads.filter(
     (upload) => upload.status === "pending"
@@ -198,54 +422,42 @@ export default function AdminPage() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid md:grid-cols-3 gap-6 mb-8">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Pending Uploads
-              </CardTitle>
-              <Upload className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{pendingUploads.length}</div>
-              <p className="text-xs text-muted-foreground">Awaiting approval</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Open Requests
-              </CardTitle>
-              <MessageSquare className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{openRequests.length}</div>
-              <p className="text-xs text-muted-foreground">Need fulfillment</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{users.length}</div>
-              <p className="text-xs text-muted-foreground">
-                Registered members
-              </p>
-            </CardContent>
-          </Card>
-        </div>
+        <StatsCards
+          pendingUploads={pendingUploads.length}
+          openRequests={openRequests.length}
+          totalUsers={users.length}
+          isLoading={isLoading}
+        />
 
         <Tabs defaultValue="uploads" className="space-y-6">
           <TabsList>
-            <TabsTrigger value="uploads">Pending Uploads</TabsTrigger>
-            <TabsTrigger value="requests">Pending Requests</TabsTrigger>
+            <TabsTrigger value="uploads">
+              Pending Uploads
+              {!isLoading && pendingUploads.length > 0 && (
+                <Badge variant="secondary" className="ml-2">
+                  {pendingUploads.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="requests">
+              Pending Requests
+              {!isLoading && openRequests.length > 0 && (
+                <Badge variant="secondary" className="ml-2">
+                  {openRequests.length}
+                </Badge>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="users">Users</TabsTrigger>
           </TabsList>
 
           <TabsContent value="uploads" className="space-y-4">
-            {pendingUploads.length === 0 ? (
+            {isLoading ? (
+              <>
+                <UploadCardSkeleton />
+                <UploadCardSkeleton />
+                <UploadCardSkeleton />
+              </>
+            ) : pendingUploads.length === 0 ? (
               <Card>
                 <CardContent className="text-center py-8">
                   <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
@@ -254,79 +466,27 @@ export default function AdminPage() {
               </Card>
             ) : (
               pendingUploads.map((upload) => (
-                <Card key={upload.id}>
-                  <CardHeader>
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <CardTitle className="text-lg">
-                          {upload.title}
-                        </CardTitle>
-                        <CardDescription className="mt-2">
-                          {upload.description}
-                        </CardDescription>
-                        <div className="flex flex-wrap gap-2 mt-3">
-                          {upload.tags.map((tag) => (
-                            <Badge key={tag} variant="secondary">
-                              {tag}
-                            </Badge>
-                          ))}
-                        </div>
-                        <div className="flex items-center gap-4 mt-3 text-sm text-muted-foreground">
-                          <span>Uploaded by: {upload.uploader}</span>
-                          <span>
-                            Date:{" "}
-                            {new Date(upload.uploadDate).toLocaleDateString()}
-                          </span>
-                          <span>Type: {upload.fileType}</span>
-                        </div>
-                      </div>
-                      <div className="flex gap-2 ml-4">
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button variant="outline" size="sm">
-                              <Eye className="h-4 w-4 mr-2" />
-                              Preview
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent>
-                            <DialogHeader>
-                              <DialogTitle>File Preview</DialogTitle>
-                              <DialogDescription>
-                                Preview functionality would be implemented here
-                              </DialogDescription>
-                            </DialogHeader>
-                            <div className="bg-muted p-8 rounded-lg text-center">
-                              <p className="text-muted-foreground">
-                                File preview not available in demo
-                              </p>
-                            </div>
-                          </DialogContent>
-                        </Dialog>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleRejectUpload(upload.id)}
-                        >
-                          <X className="h-4 w-4 mr-2" />
-                          Reject
-                        </Button>
-                        <Button
-                          size="sm"
-                          onClick={() => handleApproveUpload(upload.id)}
-                        >
-                          <Check className="h-4 w-4 mr-2" />
-                          Approve
-                        </Button>
-                      </div>
-                    </div>
-                  </CardHeader>
-                </Card>
+                <UploadCard
+                  key={upload.id}
+                  upload={getUploadDisplayData(upload)}
+                  onApprove={handleApproveUpload}
+                  onReject={handleRejectUpload}
+                  onEdit={handleEditUpload}
+                  actionLoading={actionLoading}
+                  hasUnsavedEdits={hasUploadPendingEdits(upload.id)}
+                />
               ))
             )}
           </TabsContent>
 
           <TabsContent value="requests" className="space-y-4">
-            {openRequests.length === 0 ? (
+            {isLoading ? (
+              <>
+                <RequestCardSkeleton />
+                <RequestCardSkeleton />
+                <RequestCardSkeleton />
+              </>
+            ) : openRequests.length === 0 ? (
               <Card>
                 <CardContent className="text-center py-8">
                   <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
@@ -335,126 +495,49 @@ export default function AdminPage() {
               </Card>
             ) : (
               openRequests.map((request) => (
-                <Card key={request.id}>
-                  <CardHeader>
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <CardTitle className="text-lg">
-                          {request.request}
-                        </CardTitle>
-                        <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-                          <span>Requested by: {request.requester}</span>
-                          <span>
-                            Date:{" "}
-                            {new Date(request.requestDate).toLocaleDateString()}
-                          </span>
-                        </div>
-                      </div>
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button>
-                            <Upload className="h-4 w-4 mr-2" />
-                            Fulfill
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>Fulfill Request</DialogTitle>
-                            <DialogDescription>
-                              Upload a file to fulfill this request
-                            </DialogDescription>
-                          </DialogHeader>
-                          <div className="space-y-4">
-                            <div>
-                              <Label htmlFor="fulfillment-file">
-                                Upload File
-                              </Label>
-                              <Input
-                                id="fulfillment-file"
-                                type="file"
-                                onChange={(e) =>
-                                  setFulfillmentFile(
-                                    e.target.files?.[0] || null
-                                  )
-                                }
-                              />
-                            </div>
-                            <Button
-                              onClick={() => handleFulfillRequest(request.id)}
-                              disabled={!fulfillmentFile}
-                              className="w-full"
-                            >
-                              Fulfill Request
-                            </Button>
-                          </div>
-                        </DialogContent>
-                      </Dialog>
-                    </div>
-                  </CardHeader>
-                </Card>
+                <RequestCard
+                  key={request.id}
+                  request={request}
+                  onFulfill={handleFulfillRequest}
+                  onEdit={handleEditRequest}
+                  actionLoading={actionLoading}
+                />
               ))
             )}
           </TabsContent>
 
           <TabsContent value="users">
-            <Card>
-              <CardHeader>
-                <CardTitle>User Management</CardTitle>
-                <CardDescription>
-                  Manage user roles and permissions
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead>Join Date</TableHead>
-                      <TableHead>Uploads</TableHead>
-                      <TableHead>Requests</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {users.map((user) => (
-                      <TableRow key={user.id}>
-                        <TableCell className="font-medium">
-                          {user.name}
-                        </TableCell>
-                        <TableCell>{user.email}</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={
-                              user.role === "admin" ? "default" : "secondary"
-                            }
-                          >
-                            {user.role}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {new Date(user.joinDate).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell>{user.uploads}</TableCell>
-                        <TableCell>{user.requests}</TableCell>
-                        <TableCell>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleToggleUserRole(user.id)}
-                          >
-                            {user.role === "admin" ? "Demote" : "Promote"}
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+            <UsersTable
+              users={users}
+              onToggleRole={handleToggleUserRole}
+              actionLoading={actionLoading}
+              isLoading={isLoading}
+            />
           </TabsContent>
         </Tabs>
+
+        {/* Edit Dialogs */}
+        <EditUploadDialog
+          upload={editingUpload}
+          isOpen={isEditUploadDialogOpen}
+          onClose={() => {
+            setIsEditUploadDialogOpen(false);
+            setEditingUpload(null);
+          }}
+          onUpdate={handleSaveUploadEdits}
+          actionLoading={actionLoading}
+        />
+
+        <EditRequestDialog
+          request={editingRequest}
+          isOpen={isEditRequestDialogOpen}
+          onClose={() => {
+            setIsEditRequestDialogOpen(false);
+            setEditingRequest(null);
+          }}
+          onUpdate={handleUpdateRequest}
+          actionLoading={actionLoading}
+        />
       </div>
     </div>
   );

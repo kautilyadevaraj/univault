@@ -52,4 +52,5 @@ model User {
   program        String?
   role           String     @default("MEMBER")
   resources      Resource[]
+  createdAt       DateTime @default(now())
 }

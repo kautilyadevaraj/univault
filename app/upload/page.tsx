@@ -155,9 +155,6 @@ export default function UploadPage() {
   const suggestedTags = [
     "Computer Science",
     "Mathematics",
-    "Physics",
-    "Chemistry",
-    "Biology",
     "Midterm",
     "Final",
     "Quiz",
