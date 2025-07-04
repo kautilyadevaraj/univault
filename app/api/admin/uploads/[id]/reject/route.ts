@@ -13,9 +13,9 @@ const s3 = new S3Client({
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const id = params.id;
+  const {id} = await params;
   const existing = await db.resource.findUnique({ where: { id } });
   if (!existing)
     return NextResponse.json({ error: "Not found" }, { status: 404 });

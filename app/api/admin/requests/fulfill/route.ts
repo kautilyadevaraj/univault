@@ -18,9 +18,9 @@ const s3 = new S3Client({
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const id = params.id;
+  const {id} = await params;
   const file = (await req.formData()).get("file") as File | null;
   if (!file) return NextResponse.json({ error: "No file" }, { status: 400 });
 

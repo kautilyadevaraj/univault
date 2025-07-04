@@ -3,9 +3,9 @@ import { db } from "@/lib/prisma";
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const id = params.id;
+  const {id} = await params;
   const body = await req.json();
 
   const updated = await db.request.update({
