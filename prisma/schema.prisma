@@ -8,47 +8,48 @@ datasource db {
 }
 
 model Resource {
-  id          String   @id @default(uuid())
-  title       String
-  description String?
-  uploaderId  String?
-  fileUrl     String
-  status      String   @default("PENDING")
-  createdAt   DateTime @default(now())
-  school      String?
-  program     String?
-  yearOfCreation        Int?
-  courseYear Int?                     
-  courseName  String?                 
-  resourceType String          
-  tags        String[]
-  user        User?    @relation(fields: [uploaderId], references: [id])            
+  id              String   @id @default(uuid())
+  title           String
+  description     String?
+  uploaderId      String?
+  fileUrl         String
+  status          String   @default("PENDING")
+  createdAt       DateTime @default(now())
+  school          String?
+  program         String?
+  yearOfCreation  Int?
+  courseYear      Int?
+  courseName      String?
+  resourceType    String
+  tags            String[]
+  linkedRequestId String?
+  user            User?    @relation(fields: [uploaderId], references: [id])
 }
 
 model Request {
-  id          String   @id @default(uuid())
-  queryText   String
-  requesterId String?
-  status      String   @default("PENDING")
-  createdAt   DateTime @default(now())
-  email       String?
-  school      String
-  program     String?
-  courseYear Int
-  courseName  String
+  id           String   @id @default(uuid())
+  queryText    String
+  requesterId  String?
+  status       String   @default("PENDING")
+  createdAt    DateTime @default(now())
+  email        String?
+  school       String
+  program      String?
+  courseYear   Int
+  courseName   String
   resourceType String
-  tags        String[]
+  tags         String[]
 }
 
 model User {
-  id             String   @id @default(uuid())
-  email          String   @unique
+  id             String     @id @default(uuid())
+  email          String     @unique
   password       String
-  username       String   @unique
+  username       String     @unique
   yearOfStudy    Int?
   graduatingYear Int?
   school         String?
-  program         String?
-  role           String   @default("MEMBER")
+  program        String?
+  role           String     @default("MEMBER")
   resources      Resource[]
 }

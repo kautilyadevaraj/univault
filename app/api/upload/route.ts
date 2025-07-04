@@ -1,5 +1,10 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+// app/api/resource/upload/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { prisma } from "@/lib/prisma";
+import { cookies } from "next/headers";
+import { jwtVerify } from "jose";
+import { randomUUID } from "crypto";
 
 const s3 = new S3Client({
   region: process.env.B2_REGION,
@@ -10,30 +15,93 @@ const s3 = new S3Client({
   },
 });
 
+const JWT_SECRET = process.env.JWT_SECRET!;
+
 export async function POST(req: NextRequest) {
-  const formData = await req.formData();
-  const file = formData.get("file") as File;
-
-  if (!file) {
-    return NextResponse.json({ error: "No file provided" }, { status: 400 });
-  }
-
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const fileKey = `uploads/${Date.now()}_${file.name}`;
-
   try {
-    const command = new PutObjectCommand({
-      Bucket: process.env.B2_BUCKET_NAME!,
-      Key: fileKey,
-      Body: buffer,
-      ContentType: file.type,
+    const formData = await req.formData();
+
+    // parse metadata fields
+    const title = formData.get("title")?.toString() ?? "";
+    const description = formData.get("description")?.toString() ?? null;
+    const school = formData.get("school")?.toString() ?? null;
+    const program = formData.get("program")?.toString() ?? null;
+    const yearOfCreation = formData.get("yearOfCreation")
+      ? parseInt(formData.get("yearOfCreation")!.toString(), 10)
+      : null;
+      const courseYear = formData.get("courseYear")
+        ? parseInt(formData.get("courseYear")!.toString(), 10)
+        : null;    
+    const courseName = formData.get("courseName")?.toString() ?? null;
+    const resourceType = formData.get("resourceType")?.toString() ?? "";
+    // assume tags were sent as a JSON string
+    const tags = formData.get("tags")
+      ? JSON.parse(formData.get("tags")!.toString())
+      : [];
+    const linkedRequestId = formData.get("linkedRequestId")?.toString() ?? null;
+
+    // get the file
+    const file = formData.get("file") as File;
+    if (!file) {
+      return NextResponse.json({ error: "No file provided" }, { status: 400 });
+    }
+
+    // determine uploaderId from JWT (if present)
+    let uploaderId: string | null = null;
+    const token = (await cookies()).get("univault_token")?.value;
+    if (token) {
+      try {
+        const { payload } = await jwtVerify(
+          token,
+          new TextEncoder().encode(JWT_SECRET)
+        );
+        uploaderId = (payload as any).userId;
+      } catch {
+        // invalid token → treat as anonymous
+      }
+    }
+
+    // generate a random filename with same extension
+    const ext = file.name.split(".").pop() ?? "bin";
+    const randomName = `${randomUUID()}.${ext}`;
+    const key = `pending/${randomName}`;
+
+    // upload to B2
+    const buffer = Buffer.from(await file.arrayBuffer());
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: process.env.B2_BUCKET_NAME!,
+        Key: key,
+        Body: buffer,
+        ContentType: file.type,
+      })
+    );
+
+    // create DB entry with status "PENDING"
+    const resource = await prisma.resource.create({
+      data: {
+        title,
+        description,
+        school,
+        program,
+        yearOfCreation,
+        courseYear,
+        courseName,
+        resourceType,
+        tags,
+        linkedRequestId,
+        fileUrl: key,
+        status: "PENDING",
+        uploaderId,
+      },
     });
 
-    await s3.send(command);
-
-    return NextResponse.json({ fileKey }, { status: 200 });
+    return NextResponse.json(resource, { status: 201 });
   } catch (error) {
-    console.error("Upload error:", error);
-    return NextResponse.json({ error: "Upload failed" }, { status: 500 });
+    console.error("Upload + DB error:", error);
+    return NextResponse.json(
+      { error: "Upload or database save failed" },
+      { status: 500 }
+    );
   }
 }
