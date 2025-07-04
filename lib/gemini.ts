@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI, GenerativeModel } from "@google/generative-ai";
-import type { Resource } from "@prisma/client";
+import type { Resource } from "./generated/prisma";
 
 // Type for embedding values
 type EmbeddingValues = number[];
