@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import { use } from "react";
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Sign JWT token
-    const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET, {
+    const token = jwt.sign({ userId: user.id, role: user.role, email: user.email }, JWT_SECRET, {
       expiresIn: "7d",
     });
 
