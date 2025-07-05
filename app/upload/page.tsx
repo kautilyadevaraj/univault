@@ -10,6 +10,7 @@ import {
   User,
   Search,
   LinkIcon,
+  Check
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -344,7 +345,7 @@ export default function UploadPage() {
           <Card className="text-center">
             <CardHeader>
               <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <CheckCircle className="h-8 w-8 text-green-600" />
+                <Check className="h-8 w-8 text-green-600" />
               </div>
               <CardTitle className="text-2xl">Upload Successful!</CardTitle>
               <CardDescription className="text-base">
@@ -417,7 +418,7 @@ export default function UploadPage() {
 
   return (
     <div className="min-h-screen py-8 px-4">
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">Upload Resource</h1>
           <p className="text-muted-foreground">
@@ -426,8 +427,8 @@ export default function UploadPage() {
           </p>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
+        <div className="grid lg:grid-cols-4 gap-6">
+          <div className="lg:col-span-4">
             <Card>
               <CardHeader>
                 <CardTitle>Resource Details</CardTitle>
@@ -455,26 +456,28 @@ export default function UploadPage() {
                       </Label>
                     </div>
 
-                    {!formData.uploadAnonymously && !session?.isAuthenticated && (
-                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                        <div className="flex items-center gap-2 text-yellow-800">
-                          <User className="h-4 w-4" />
-                          <span className="text-sm font-medium">
-                            Authentication Required
-                          </span>
+                    {!formData.uploadAnonymously &&
+                      !session?.isAuthenticated && (
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                          <div className="flex items-center gap-2 text-yellow-800">
+                            <User className="h-4 w-4" />
+                            <span className="text-sm font-medium">
+                              Authentication Required
+                            </span>
+                          </div>
+                          <p className="text-sm text-yellow-700 mt-1">
+                            You need to be logged in to upload with your
+                            profile.{" "}
+                            <Link
+                              href="/login"
+                              className="underline hover:no-underline"
+                            >
+                              Login here
+                            </Link>{" "}
+                            or check "Upload anonymously" above.
+                          </p>
                         </div>
-                        <p className="text-sm text-yellow-700 mt-1">
-                          You need to be logged in to upload with your profile.{" "}
-                          <Link
-                            href="/login"
-                            className="underline hover:no-underline"
-                          >
-                            Login here
-                          </Link>{" "}
-                          or check "Upload anonymously" above.
-                        </p>
-                      </div>
-                    )}
+                      )}
                   </div>
 
                   {/* Link to Request */}
@@ -618,6 +621,69 @@ export default function UploadPage() {
                         )}
                       </div>
                     )}
+                  </div>
+
+                  {/* File Upload */}
+                  <div className="space-y-2">
+                    <Label htmlFor="file-upload">Upload File *</Label>
+                    <div
+                      className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                        isDragOver
+                          ? "border-primary bg-primary/5"
+                          : "border-muted-foreground/25 hover:border-muted-foreground/50"
+                      }`}
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                    >
+                      {formData.file ? (
+                        <div className="flex items-center justify-center gap-2">
+                          <File className="h-5 w-5 text-primary" />
+                          <span className="font-medium">
+                            {formData.file.name}
+                          </span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              setFormData((prev) => ({ ...prev, file: null }))
+                            }
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div>
+                          <Upload className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                          <p className="text-muted-foreground mb-2">
+                            Drag and drop your file here, or click to browse
+                          </p>
+                          <input
+                            type="file"
+                            className="hidden"
+                            id="file-upload"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleFileSelect(file);
+                            }}
+                            accept=".pdf,.doc,.docx,.ppt,.pptx,.txt"
+                          />
+                          <Button type="button" variant="outline" asChild>
+                            <label
+                              htmlFor="file-upload"
+                              className="cursor-pointer"
+                            >
+                              Choose File
+                            </label>
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Supported formats: PDF, DOC, DOCX, PPT, PPTX, TXT (Max
+                      50MB)
+                    </p>
                   </div>
 
                   {/* Title */}
@@ -910,81 +976,6 @@ export default function UploadPage() {
                 </form>
               </CardContent>
             </Card>
-          </div>
-
-          <div className="lg:col-span-1">
-            <div className="space-y-6">
-              {/* File Upload Card */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">File Upload *</CardTitle>
-                  <CardDescription>
-                    Upload your resource file here
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div
-                    className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                      isDragOver
-                        ? "border-primary bg-primary/5"
-                        : "border-muted-foreground/25 hover:border-muted-foreground/50"
-                    }`}
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
-                  >
-                    {formData.file ? (
-                      <div className="flex items-center justify-center gap-2">
-                        <File className="h-5 w-5 text-primary" />
-                        <span className="font-medium">
-                          {formData.file.name}
-                        </span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            setFormData((prev) => ({ ...prev, file: null }))
-                          }
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <div>
-                        <Upload className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                        <p className="text-muted-foreground mb-2">
-                          Drag and drop your file here, or click to browse
-                        </p>
-                        <input
-                          type="file"
-                          className="hidden"
-                          id="file-upload"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) handleFileSelect(file);
-                          }}
-                          accept=".pdf,.doc,.docx,.ppt,.pptx,.txt"
-                        />
-                        <Button type="button" variant="outline" asChild>
-                          <label
-                            htmlFor="file-upload"
-                            className="cursor-pointer"
-                          >
-                            Choose File
-                          </label>
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Supported formats: PDF, DOC, DOCX, PPT, PPTX, TXT (Max 50MB)
-                  </p>
-                </CardContent>
-              </Card>
-
-              
-            </div>
           </div>
         </div>
       </div>

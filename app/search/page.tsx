@@ -126,15 +126,26 @@ export default function SearchPage() {
   const [useSmartSearch, setUseSmartSearch] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
 
+  // Frontend pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [resultsPerPage, setResultsPerPage] = useState(10);
+
   // Improved debouncing with longer delay for better UX
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedQuery(searchQuery);
+      // Reset to page 1 when search query changes
+      setCurrentPage(1);
     }, 800); // Increased from 300ms to 800ms
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Build search URL with parameters
+  // Reset to page 1 when filters or sort changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedFilters, sortBy, useSmartSearch]);
+
+  // Build search URL with parameters (keeping original simple format)
   const searchUrl = useMemo(() => {
     const params = new URLSearchParams();
     if (debouncedQuery.trim()) {
@@ -162,20 +173,26 @@ export default function SearchPage() {
   }, [isLoading]);
 
   const filterOptions = [
-    "Computer Science",
-    "Mathematics",
-    "Physics",
-    "Chemistry",
-    "2023",
-    "2022",
-    "2021",
-    "Midterm",
-    "Final",
-    "Notes",
     "Past Papers",
+    "2025",
+    "2024",
+    "Midterm",
+    "SEE",
+    "Notes",
+    "CIE-1",
+    "CIE-3",
+    "Retest Papers"
   ];
 
-  // Filter and sort results
+  const courseYears = {
+    "1": "1st Year",
+    "2": "2nd Year",
+    "3": "3rd Year",
+    "4": "4th Year",
+    "5": "5th Year",
+  };
+
+  // Filter and sort results (frontend processing)
   const filteredAndSortedResults = useMemo(() => {
     if (!searchResults) return [];
 
@@ -222,6 +239,27 @@ export default function SearchPage() {
     return filtered;
   }, [searchResults, selectedFilters, sortBy, useSmartSearch]);
 
+  // Frontend pagination calculations
+  const paginationData = useMemo(() => {
+    const totalResults = filteredAndSortedResults.length;
+    const totalPages = Math.ceil(totalResults / resultsPerPage);
+    const startIndex = (currentPage - 1) * resultsPerPage;
+    const endIndex = startIndex + resultsPerPage;
+    const currentResults = filteredAndSortedResults.slice(startIndex, endIndex);
+
+    return {
+      currentResults,
+      totalResults,
+      totalPages,
+      currentPage,
+      resultsPerPage,
+      hasNextPage: currentPage < totalPages,
+      hasPrevPage: currentPage > 1,
+      startIndex: totalResults > 0 ? startIndex + 1 : 0,
+      endIndex: Math.min(endIndex, totalResults),
+    };
+  }, [filteredAndSortedResults, currentPage, resultsPerPage]);
+
   const toggleFilter = (filter: string) => {
     setSelectedFilters((prev) =>
       prev.includes(filter)
@@ -234,6 +272,18 @@ export default function SearchPage() {
     setSelectedFilters([]);
     setSearchQuery("");
     setDebouncedQuery("");
+    setCurrentPage(1);
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    // Scroll to top when page changes
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleResultsPerPageChange = (value: string) => {
+    setResultsPerPage(Number(value));
+    setCurrentPage(1); // Reset to first page when changing results per page
   };
 
   async function handlePreview(resource: SearchResult) {
@@ -297,6 +347,50 @@ export default function SearchPage() {
   const handleRefresh = () => {
     mutate();
     toast.success("Results refreshed!");
+  };
+
+  // Generate pagination items
+  const generatePaginationItems = () => {
+    const { totalPages, currentPage } = paginationData;
+    if (totalPages <= 1) return [];
+
+    const items = [];
+    const maxVisiblePages = 5;
+
+    if (totalPages <= maxVisiblePages) {
+      // Show all pages if total pages is small
+      for (let i = 1; i <= totalPages; i++) {
+        items.push(i);
+      }
+    } else {
+      // Show smart pagination
+      if (currentPage <= 3) {
+        // Show first few pages
+        for (let i = 1; i <= 4; i++) {
+          items.push(i);
+        }
+        items.push("ellipsis");
+        items.push(totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        // Show last few pages
+        items.push(1);
+        items.push("ellipsis");
+        for (let i = totalPages - 3; i <= totalPages; i++) {
+          items.push(i);
+        }
+      } else {
+        // Show middle pages
+        items.push(1);
+        items.push("ellipsis");
+        for (let i = currentPage - 1; i <= currentPage + 1; i++) {
+          items.push(i);
+        }
+        items.push("ellipsis");
+        items.push(totalPages);
+      }
+    }
+
+    return items;
   };
 
   if (error) {
@@ -443,16 +537,17 @@ export default function SearchPage() {
             </div>
           )}
 
-          {/* Sort Control */}
+          {/* Sort Control and Results Per Page */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div className="flex items-center gap-4">
               <p className="text-muted-foreground">
                 {isSearching ? (
                   "Searching..."
-                ) : (
+                ) : paginationData.totalResults > 0 ? (
                   <>
-                    Showing {filteredAndSortedResults.length} of{" "}
-                    {searchResults?.length || 0} results
+                    Showing {paginationData.startIndex} to{" "}
+                    {paginationData.endIndex} of {paginationData.totalResults}{" "}
+                    results
                     {useSmartSearch && debouncedQuery && (
                       <Badge
                         variant="outline"
@@ -462,6 +557,8 @@ export default function SearchPage() {
                       </Badge>
                     )}
                   </>
+                ) : (
+                  "No results found"
                 )}
               </p>
               {(debouncedQuery || selectedFilters.length > 0) &&
@@ -472,25 +569,42 @@ export default function SearchPage() {
                   </Button>
                 )}
             </div>
-            <Select
-              value={sortBy}
-              onValueChange={setSortBy}
-              disabled={isSearching}
-            >
-              <SelectTrigger className="w-full sm:w-[180px]">
-                <ArrowUpDown className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="Sort by" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="relevance">Relevance</SelectItem>
-                {useSmartSearch && (
-                  <SelectItem value="similarity">AI Similarity</SelectItem>
-                )}
-                <SelectItem value="date">Upload Date</SelectItem>
-                <SelectItem value="downloads">Most Downloaded</SelectItem>
-                <SelectItem value="title">Title A-Z</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex gap-2">
+              <Select
+                value={resultsPerPage.toString()}
+                onValueChange={handleResultsPerPageChange}
+                disabled={isSearching}
+              >
+                <SelectTrigger className="">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="5">5 per page</SelectItem>
+                  <SelectItem value="10">10 per page</SelectItem>
+                  <SelectItem value="20">20 per page</SelectItem>
+                  <SelectItem value="50">50 per page</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select
+                value={sortBy}
+                onValueChange={setSortBy}
+                disabled={isSearching}
+              >
+                <SelectTrigger className="w-full sm:w-[180px]">
+                  <ArrowUpDown className="h-4 w-4 mr-2" />
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="relevance">Relevance</SelectItem>
+                  {useSmartSearch && (
+                    <SelectItem value="similarity">AI Similarity</SelectItem>
+                  )}
+                  <SelectItem value="date">Upload Date</SelectItem>
+                  <SelectItem value="downloads">Most Downloaded</SelectItem>
+                  <SelectItem value="title">Title A-Z</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
 
@@ -498,10 +612,10 @@ export default function SearchPage() {
         <div className="space-y-4 mb-8">
           {isSearching ? (
             // Loading skeletons - only for results
-            Array.from({ length: 5 }).map((_, i) => (
+            Array.from({ length: resultsPerPage }).map((_, i) => (
               <SearchResultSkeleton key={i} />
             ))
-          ) : filteredAndSortedResults.length === 0 ? (
+          ) : paginationData.currentResults.length === 0 ? (
             // Empty state
             <Card className="text-center py-12">
               <CardHeader>
@@ -532,8 +646,8 @@ export default function SearchPage() {
               </CardHeader>
             </Card>
           ) : (
-            // Results
-            filteredAndSortedResults.map((result) => (
+            // Results - Show only current page results
+            paginationData.currentResults.map((result) => (
               <Card
                 key={result.id}
                 className="hover:shadow-md transition-shadow"
@@ -583,17 +697,18 @@ export default function SearchPage() {
                           {new Date(result.uploadDate).toLocaleDateString()}
                         </div>
                         <div className="flex items-center gap-1">
-                          <Download className="h-3 w-3" />
-                          {result.downloads} downloads
-                        </div>
-                        <div className="flex items-center gap-1">
                           {getFileIcon(result.fileType)}
                           {result.fileType}
                         </div>
                       </div>
                       <div className="text-sm text-muted-foreground">
                         <span className="font-medium">{result.school}</span> •{" "}
-                        {result.courseName} • {result.courseYear}
+                        {result.courseName} •{" "}
+                        {
+                          courseYears[
+                            result.courseYear as keyof typeof courseYears
+                          ]
+                        }
                       </div>
                     </div>
                     <div className="flex flex-row lg:flex-col gap-2 w-full lg:w-auto">
@@ -745,30 +860,63 @@ export default function SearchPage() {
           </DialogContent>
         </Dialog>
 
-        {/* Pagination */}
-        {!isSearching && filteredAndSortedResults.length > 0 && (
+        {/* Frontend Pagination */}
+        {!isSearching && paginationData.totalPages > 1 && (
           <div className="flex justify-center">
             <Pagination>
               <PaginationContent>
                 <PaginationItem>
-                  <PaginationPrevious href="#" />
+                  <PaginationPrevious
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (paginationData.hasPrevPage) {
+                        handlePageChange(paginationData.currentPage - 1);
+                      }
+                    }}
+                    className={
+                      !paginationData.hasPrevPage
+                        ? "pointer-events-none opacity-50"
+                        : "cursor-pointer"
+                    }
+                  />
                 </PaginationItem>
+
+                {generatePaginationItems().map((item, index) => (
+                  <PaginationItem key={index}>
+                    {item === "ellipsis" ? (
+                      <PaginationEllipsis />
+                    ) : (
+                      <PaginationLink
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handlePageChange(item as number);
+                        }}
+                        isActive={item === paginationData.currentPage}
+                        className="cursor-pointer"
+                      >
+                        {item}
+                      </PaginationLink>
+                    )}
+                  </PaginationItem>
+                ))}
+
                 <PaginationItem>
-                  <PaginationLink href="#" isActive>
-                    1
-                  </PaginationLink>
-                </PaginationItem>
-                <PaginationItem>
-                  <PaginationLink href="#">2</PaginationLink>
-                </PaginationItem>
-                <PaginationItem>
-                  <PaginationLink href="#">3</PaginationLink>
-                </PaginationItem>
-                <PaginationItem>
-                  <PaginationEllipsis />
-                </PaginationItem>
-                <PaginationItem>
-                  <PaginationNext href="#" />
+                  <PaginationNext
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (paginationData.hasNextPage) {
+                        handlePageChange(paginationData.currentPage + 1);
+                      }
+                    }}
+                    className={
+                      !paginationData.hasNextPage
+                        ? "pointer-events-none opacity-50"
+                        : "cursor-pointer"
+                    }
+                  />
                 </PaginationItem>
               </PaginationContent>
             </Pagination>

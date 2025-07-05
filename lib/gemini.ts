@@ -1,6 +1,18 @@
 import { GoogleGenerativeAI, GenerativeModel } from "@google/generative-ai";
 import type { Resource } from "./generated/prisma";
 
+interface EmbeddingData {
+  title: string;
+  description: string | null;
+  courseName: string | null;
+  courseYear: number | null;
+  program: string | null;
+  resourceType: string;
+  school: string | null;
+  tags: string[];
+  yearOfCreation: number | null;
+}
+
 // Type for embedding values
 type EmbeddingValues = number[];
 
@@ -48,7 +60,7 @@ export async function generateEmbedding(
  * @param resource - Resource object to create text from
  * @returns string - Combined text for embedding generation
  */
-export function createResourceText(resource: Resource): string {
+export function createResourceText(resource: EmbeddingData): string {
   if (!resource) {
     throw new Error("Resource object cannot be null or undefined");
   }

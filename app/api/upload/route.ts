@@ -7,6 +7,18 @@ import { randomUUID } from "crypto";
 import { generateEmbedding, createResourceText } from "@/lib/gemini";
 import type { Resource } from "@/lib/generated/prisma";
 
+interface EmbeddingData {
+  title: string;
+  description: string | null;
+  courseName: string | null;
+  courseYear: number | null;
+  program: string | null;
+  resourceType: string;
+  school: string | null;
+  tags: string[];
+  yearOfCreation: number | null;
+}
+
 const s3 = new S3Client({
   region: process.env.B2_REGION,
   endpoint: process.env.B2_ENDPOINT,
@@ -80,7 +92,7 @@ export async function POST(req: NextRequest) {
 
     let embedding: number[] | null = null;
     try {
-      const resourceData: Resource = {
+      const resourceData: EmbeddingData = {
         title,
         description,
         school,
@@ -90,12 +102,6 @@ export async function POST(req: NextRequest) {
         courseName,
         resourceType,
         tags,
-        linkedRequestId,
-        status : "PENDING",
-        uploaderId,
-        fileUrl: key,
-        createdAt: new Date(),
-        id: randomUUID(),
       };
 
       const resourceText = createResourceText(resourceData);
