@@ -751,7 +751,7 @@ export default function SearchPage() {
 
         {/* Preview Dialog */}
         <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
-          <DialogContent className="max-w-[95vw] sm:max-w-4xl max-h-[85vh] p-0 flex flex-col">
+          <DialogContent className="max-w-[95vw] sm:max-w-4xl  p-0 flex flex-col">
             <div className="flex-shrink-0 p-6 pb-0">
               <DialogHeader>
                 <DialogTitle className="text-lg sm:text-xl mb-2 pr-8 text-start">
@@ -795,7 +795,7 @@ export default function SearchPage() {
                           return (
                             <iframe
                               src={url}
-                              className="w-full h-64 sm:h-80 rounded-md border"
+                              className="w-full h-60 sm:h-80 rounded-md border"
                               title="PDF Preview"
                             />
                           );
@@ -832,7 +832,7 @@ export default function SearchPage() {
                 </ScrollArea>
 
                 {/* Action Buttons - Fixed at bottom */}
-                <div className="flex-shrink-0 flex flex-col sm:flex-row justify-end gap-2 p-6 pt-4 border-t bg-background">
+                <div className="flex-shrink-0 flex flex-col sm:flex-row justify-end gap-2 p-6 pt-4 border-t rounded-b-lg bg-background">
                   <Button
                     variant="outline"
                     onClick={() => setIsPreviewOpen(false)}
