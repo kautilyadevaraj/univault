@@ -58,4 +58,16 @@ model User {
   username       String     @unique
   yearOfStudy    Int?
   resources      Resource[]
+
+  profileVisibility     String     @default("PUBLIC") // PUBLIC, PRIVATE, SCHOOL_ONLY
+  showEmail             Boolean    @default(false)
+  showSchoolInfo        Boolean    @default(true)
+  showGraduationYear    Boolean    @default(true)
+  showResourceCount     Boolean    @default(true)
+  showContributionScore Boolean    @default(true)
+  
+  // Additional profile fields
+  bio                   String?
+  profilePicture        String?
+  socialLinks           String[]   @default([])
 }

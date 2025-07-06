@@ -55,6 +55,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
+import { UserLink } from "@/components/user-link";
 
 interface SearchResult {
   id: string;
@@ -338,9 +339,9 @@ export default function SearchPage() {
   const getFileIcon = (fileType: string) => {
     switch (fileType.toLowerCase()) {
       case "pdf":
-        return <FileText className="h-4 w-4" />;
+        return <FileText className="h-3 w-3" />;
       default:
-        return <File className="h-4 w-4" />;
+        return <File className="h-3 w-3" />;
     }
   };
 
@@ -688,9 +689,12 @@ export default function SearchPage() {
                         ))}
                       </div>
                       <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground mb-3">
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center justify-center gap-1">
                           <User className="h-3 w-3" />
-                          <span className="truncate">{result.uploader}</span>
+                          <UserLink
+                            username={result.uploader}
+                            className="text-muted-foreground underline hover:text-black"
+                          />
                         </div>
                         <div className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
