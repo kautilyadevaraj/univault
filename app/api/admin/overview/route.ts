@@ -1,3 +1,4 @@
+// /admin/overview/route.ts
 import { NextResponse } from "next/server";
 import { db } from "@/lib/prisma";
 import type { Resource, Request } from "@/lib/generated/prisma";
@@ -45,11 +46,18 @@ export async function GET() {
       courseYear: u.courseYear ?? 0,
       courseName: u.courseName ?? "",
       resourceType: u.resourceType ?? "",
+      linkedRequestId: u.linkedRequestId,
     }));
 
     //
     // 2. Pending requests
     //
+    const linked = await db.resource.findMany({
+      where: { linkedRequestId: { not: null } },
+      select: { linkedRequestId: true },
+    });
+    const linkMap = new Map(linked.map((r) => [r.linkedRequestId, true]));
+
     const pendingRequestsRaw = await db.request.findMany({
       where: { status: "PENDING" },
       orderBy: { createdAt: "desc" },
@@ -61,6 +69,15 @@ export async function GET() {
       requester: r.email ?? "Anonymous",
       requestDate: r.createdAt.toISOString(),
       status: r.status.toLowerCase(), // "pending"
+      hasResource: linkMap.has(r.id),
+      fulfillUploadURL: r.fulfillUploadURL ?? null,
+      email: r.email,
+      school: r.school,
+      program: r.program,
+      courseYear: r.courseYear,
+      courseName: r.courseName,
+      resourceType: r.resourceType,
+      tags: r.tags
     }));
 
     //

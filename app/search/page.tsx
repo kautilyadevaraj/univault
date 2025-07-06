@@ -698,7 +698,7 @@ export default function SearchPage() {
                         </div>
                         <div className="flex items-center gap-1">
                           {getFileIcon(result.fileType)}
-                          {result.fileType}
+                          {result.fileType.toUpperCase()}
                         </div>
                       </div>
                       <div className="text-sm text-muted-foreground">

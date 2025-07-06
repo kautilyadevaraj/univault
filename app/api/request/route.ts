@@ -1,26 +1,43 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma"; // Adjust the import path based on your project
+import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
 const requestSchema = z.object({
-  queryText: z.string().min(1),
-  email: z.string().email().optional(),
+  queryText: z.string().min(1, "Query is required"),
+  email: z.array(z.string().email()).optional().default([]),
   school: z.string().min(1),
   program: z.string().optional(),
-  courseYear: z.string().min(1),
+  courseYear: z.number(),
   courseName: z.string().min(1),
   resourceType: z.string().min(1),
-  tags: z.array(z.string()),
+  tags: z.array(z.string()).default([]),
 });
+
+export async function GET() {
+  try {
+    const requests = await prisma.request.findMany({
+      where: { status: "PENDING" },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return NextResponse.json(requests, { status: 200 });
+  } catch (error) {
+    console.error("[REQUEST_GET_ERROR]", error);
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
+  }
+}
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const validated = requestSchema.safeParse(body);
+    const parseResult = requestSchema.safeParse(body);
 
-    if (!validated.success) {
+    if (!parseResult.success) {
       return NextResponse.json(
-        { error: "Invalid request data", issues: validated.error.flatten() },
+        { error: "Invalid request data", issues: parseResult.error.flatten() },
         { status: 400 }
       );
     }
@@ -34,31 +51,28 @@ export async function POST(req: Request) {
       courseName,
       resourceType,
       tags,
-    } = validated.data;
+    } = parseResult.data;
 
-    const numericCourseYear = parseInt(courseYear);
-
-    const request = await prisma.request.create({
+    const newRequest = await prisma.request.create({
       data: {
         queryText,
         email,
         school,
         program,
-        courseYear: numericCourseYear,
+        courseYear,
         courseName,
         resourceType,
         tags,
         status: "PENDING",
-        createdAt: new Date(),
       },
     });
 
     return NextResponse.json(
-      { message: "Request submitted successfully", request },
+      { message: "Request submitted successfully", request: newRequest },
       { status: 201 }
     );
-  } catch (err) {
-    console.error("[REQUEST_POST_ERROR]", err);
+  } catch (error) {
+    console.error("[REQUEST_POST_ERROR]", error);
     return NextResponse.json(
       { error: "Internal Server Error" },
       { status: 500 }

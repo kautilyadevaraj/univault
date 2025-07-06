@@ -33,6 +33,7 @@ export interface PendingUpload {
   courseYear?: string;
   courseName?: string;
   resourceType?: string;
+  linkedRequestId?: string | null;
 }
 
 interface UploadCardProps {
@@ -92,6 +93,11 @@ export function UploadCard({
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-2">
               <CardTitle className="text-lg">{upload.title}</CardTitle>
+              {upload.linkedRequestId && (
+                <Badge variant="secondary" className="text-xs">
+                  From Request
+                </Badge>
+              )}
               {hasUnsavedEdits && (
                 <Badge
                   variant="outline"

@@ -1,12 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server";
 import {
   S3Client,
-  DeleteObjectCommand,
   CopyObjectCommand,
+  DeleteObjectCommand,
   PutObjectCommand,
 } from "@aws-sdk/client-s3";
 import { randomUUID } from "crypto";
 import { db } from "@/lib/prisma";
+import { generateEmbedding, createResourceText } from "@/lib/gemini";
 
 const s3 = new S3Client({
   region: process.env.B2_REGION,
@@ -25,33 +26,55 @@ export async function POST(
     const { id } = await params;
     const contentType = req.headers.get("content-type") || "";
     const isFormData = contentType.includes("multipart/form-data");
+
+    /* ──────────────────────────────────────────────────────────────────
+       1. Find the pending upload
+    ────────────────────────────────────────────────────────────────── */
     const existing = await db.resource.findUnique({ where: { id } });
-    if (!existing) {
+    if (!existing)
       return NextResponse.json(
         { error: "Resource not found" },
         { status: 404 }
       );
-    }
 
-    //
-    // Simple approval: just move pending → uploads
-    //
-    if (!isFormData) {
-      let newKey = existing.fileUrl;
-      if (existing.fileUrl.startsWith("pending/")) {
-        const fileName = existing.fileUrl.substring("pending/".length);
-        newKey = `uploads/${fileName}`;
+    /* ──────────────────────────────────────────────────────────────────
+       2. Handle file replacement (only when admin attached a new file)
+    ────────────────────────────────────────────────────────────────── */
+    let fileUrl = existing.fileUrl;
+    if (isFormData) {
+      const form = await req.formData();
+      const newFile = form.get("file") as File | null;
 
-        // 1) Copy from pending/ to uploads/
+      if (newFile) {
+        /* delete old file (pending or uploads) */
+        await s3.send(
+          new DeleteObjectCommand({
+            Bucket: process.env.B2_BUCKET_NAME!,
+            Key: existing.fileUrl,
+          })
+        );
+
+        /* upload new one straight to /uploads */
+        const ext = newFile.name.split(".").pop()!;
+        fileUrl = `uploads/${randomUUID()}.${ext}`;
+        await s3.send(
+          new PutObjectCommand({
+            Bucket: process.env.B2_BUCKET_NAME!,
+            Key: fileUrl,
+            Body: Buffer.from(await newFile.arrayBuffer()),
+            ContentType: newFile.type,
+          })
+        );
+      } else if (existing.fileUrl.startsWith("pending/")) {
+        /* same file ⇒ just move pending → uploads */
+        fileUrl = existing.fileUrl.replace("pending/", "uploads/");
         await s3.send(
           new CopyObjectCommand({
             Bucket: process.env.B2_BUCKET_NAME!,
             CopySource: `${process.env.B2_BUCKET_NAME!}/${existing.fileUrl}`,
-            Key: newKey,
+            Key: fileUrl,
           })
         );
-
-        // 2) Delete the old pending file
         await s3.send(
           new DeleteObjectCommand({
             Bucket: process.env.B2_BUCKET_NAME!,
@@ -60,47 +83,30 @@ export async function POST(
         );
       }
 
-      const updated = await db.resource.update({
-        where: { id },
-        data: {
-          status: "APPROVED",
-          fileUrl: newKey,
-        },
-      });
-      return NextResponse.json(updated);
-    }
+      /* ───── Parse/assign updated metadata fields ───── */
+      const parseIntField = (key: string) =>
+        form.get(key) ? parseInt(form.get(key)!.toString(), 10) : undefined;
 
-    //
-    // Approval with edits (form data)
-    //
-    const form = await req.formData();
-    let fileUrl = existing.fileUrl;
-    const file = form.get("file") as File | null;
-
-    if (file) {
-      // delete old
-      await s3.send(
-        new DeleteObjectCommand({
-          Bucket: process.env.B2_BUCKET_NAME!,
-          Key: existing.fileUrl,
-        })
-      );
-      // upload new
-      const ext = file.name.split(".").pop()!;
-      const key = `uploads/${randomUUID()}.${ext}`;
-      const buf = Buffer.from(await file.arrayBuffer());
-      await s3.send(
-        new PutObjectCommand({
-          Bucket: process.env.B2_BUCKET_NAME!,
-          Key: key,
-          Body: buf,
-          ContentType: file.type,
-        })
-      );
-      fileUrl = key;
+      existing.title = form.get("title")?.toString() ?? existing.title;
+      existing.description =
+        form.get("description")?.toString() ?? existing.description;
+      existing.school = form.get("school")?.toString() ?? existing.school;
+      existing.program = form.get("program")?.toString() ?? existing.program;
+      existing.yearOfCreation =
+        parseIntField("yearOfCreation") ?? existing.yearOfCreation;
+      existing.courseYear = parseIntField("courseYear") ?? existing.courseYear;
+      existing.courseName =
+        form.get("courseName")?.toString() ?? existing.courseName;
+      existing.resourceType =
+        form.get("resourceType")?.toString() ?? existing.resourceType;
+      existing.tags = form.get("tags")
+        ? JSON.parse(form.get("tags")!.toString())
+        : existing.tags;
     } else if (existing.fileUrl.startsWith("pending/")) {
-      fileUrl = existing.fileUrl.replace("pending/", "uploads/");
-      // also move in the bucket
+      /* simple approval with no metadata changes */
+      const fileName = existing.fileUrl.substring("pending/".length);
+      fileUrl = `uploads/${fileName}`;
+
       await s3.send(
         new CopyObjectCommand({
           Bucket: process.env.B2_BUCKET_NAME!,
@@ -116,35 +122,65 @@ export async function POST(
       );
     }
 
-    // parse integers
-    const parseIntField = (key: string) =>
-      form.get(key) ? parseInt(form.get(key)!.toString(), 10) : undefined;
+    /* ──────────────────────────────────────────────────────────────────
+       3. Conditionally create an embedding
+       • Only when the upload is linked to a request
+    ────────────────────────────────────────────────────────────────── */
+    if (existing.linkedRequestId) {
+      try {
+        const resourceText = createResourceText({
+          title: existing.title,
+          description: existing.description,
+          courseName: existing.courseName,
+          courseYear: existing.courseYear,
+          program: existing.program,
+          resourceType: existing.resourceType,
+          school: existing.school,
+          tags: existing.tags,
+          yearOfCreation: existing.yearOfCreation,
+        });
+        const embedding = await generateEmbedding(resourceText);
+        await db.$executeRaw`
+          UPDATE "Resource"
+          SET embedding = ${JSON.stringify(embedding)}::vector
+          WHERE id = ${existing.id}
+        `;
+      } catch (embErr) {
+        console.error("Embedding generation failed:", embErr);
+        /* Embedding is optional—approval proceeds even if it fails */
+      }
+    }
 
-    const data: any = {
-      status: "APPROVED",
-      fileUrl,
-      title: form.get("title")?.toString() ?? existing.title,
-      description: form.get("description")?.toString() ?? existing.description,
-      school: form.get("school")?.toString() ?? existing.school,
-      program: form.get("program")?.toString() ?? existing.program,
-      yearOfCreation:
-        parseIntField("yearOfCreation") ?? existing.yearOfCreation,
-      courseYear: parseIntField("courseYear") ?? existing.courseYear,
-      courseName: form.get("courseName")?.toString() ?? existing.courseName,
-      resourceType:
-        form.get("resourceType")?.toString() ?? existing.resourceType,
-      tags: form.get("tags")
-        ? JSON.parse(form.get("tags")!.toString())
-        : existing.tags,
-    };
-
+    /* ──────────────────────────────────────────────────────────────────
+       4. Persist final update
+    ────────────────────────────────────────────────────────────────── */
     const updated = await db.resource.update({
       where: { id },
-      data,
+      data: {
+        status: "APPROVED",
+        fileUrl,
+        title: existing.title,
+        description: existing.description,
+        school: existing.school,
+        program: existing.program,
+        yearOfCreation: existing.yearOfCreation,
+        courseYear: existing.courseYear,
+        courseName: existing.courseName,
+        resourceType: existing.resourceType,
+        tags: existing.tags,
+      },
     });
+
+    if (existing.linkedRequestId) {
+      // the upload originated from a /request; delete that request record
+      await db.request.delete({
+        where: { id: existing.linkedRequestId },
+      });
+    }
+
     return NextResponse.json(updated);
   } catch (error) {
-    console.error("Error approving upload:", error);
+    console.error("[UPLOAD_APPROVE_ERROR]", error);
     return NextResponse.json(
       { error: "Failed to approve upload" },
       { status: 500 }

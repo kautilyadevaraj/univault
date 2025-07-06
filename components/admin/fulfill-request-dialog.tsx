@@ -1,11 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Save } from "lucide-react";
+import { X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -21,12 +20,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { PendingUpload } from "./upload-card";
+import type { PendingRequest } from "./request-card";
 
-interface EditUploadData {
-  id: string;
+interface FulfillRequestData {
   title: string;
-  description: string;
+  description?: string;
   school: string;
   customSchool: string;
   program: string;
@@ -35,23 +33,22 @@ interface EditUploadData {
   courseName: string;
   resourceType: string;
   tags: string[];
-  file?: File;
 }
 
-interface EditUploadDialogProps {
-  upload: PendingUpload | null;
+interface FulfillRequestDialogProps {
+  request: PendingRequest | null;
   isOpen: boolean;
   onClose: () => void;
-  onUpdate: (data: EditUploadData) => Promise<void>;
+  onFulfill: (data: FormData) => Promise<void>;
   actionLoading: string | null;
 }
 
 const schools = [
-  { value: "SoCSE", label: "School of Computer Science & Engineering" },
-  { value: "SDI", label: "School of Design & Innovation" },
-  { value: "SoLAS", label: "School of Liberal Arts & Sciences" },
-  { value: "SoB", label: "School of Business" },
-  { value: "SoL", label: "School of Law" },
+  { value: "SoCSE", label: "SoCSE" },
+  { value: "SDI", label: "SDI" },
+  { value: "SoLAS", label: "SoLAS" },
+  { value: "SoB", label: "SoB" },
+  { value: "SoL", label: "SoL" },
   { value: "Others", label: "Others" },
 ];
 
@@ -66,25 +63,17 @@ const resourceTypes = [
   "Study Guide",
   "Other",
 ];
-const courseYears = [
-  "1st Year",
-  "2nd Year",
-  "3rd Year",
-  "4th Year",
-  "5th Year",
-];
+const courseYears = [1, 2, 3, 4, 5];
 
-export function EditUploadDialog({
-  upload,
+export function FulfillRequestDialog({
+  request,
   isOpen,
   onClose,
-  onUpdate,
+  onFulfill,
   actionLoading,
-}: EditUploadDialogProps) {
-  const [editData, setEditData] = useState<EditUploadData>({
-    id: "",
+}: FulfillRequestDialogProps) {
+  const [editData, setEditData] = useState<FulfillRequestData>({
     title: "",
-    description: "",
     school: "",
     customSchool: "",
     program: "",
@@ -95,26 +84,25 @@ export function EditUploadDialog({
     tags: [],
   });
   const [tagInput, setTagInput] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
 
-  // Initialize form data when upload changes
+  // Initialize form data when request changes
   useEffect(() => {
-    if (upload) {
-      setEditData({
-        id: upload.id,
-        title: upload.title,
-        description: upload.description,
-        school: upload.school || "",
-        customSchool: "",
-        program: upload.program || "",
-        yearOfCreation: upload.yearOfCreation?.toString() || "",
-        courseYear: upload.courseYear || "",
-        courseName: upload.courseName || "",
-        resourceType: upload.resourceType || "",
-        tags: upload.tags || [],
-      });
-    }
-  }, [upload]);
+    if (!request) return;
+    console.log(request)
+    setEditData({
+      title: request.request,
+      school: request.school || "",
+      customSchool: "",
+      program: request.program || "",
+      yearOfCreation: request.yearOfCreation?.toString() || "",
+      courseYear: request.courseYear || "",
+      courseName: request.courseName || "",
+      resourceType: request.resourceType || "",
+      tags: request.tags || [],
+    });
+    setFile(null);
+  }, [request]);
 
   const handleAddTag = (tag: string) => {
     if (tag.trim() && !editData.tags.includes(tag)) {
@@ -134,56 +122,66 @@ export function EditUploadDialog({
   };
 
   const handleSubmit = async () => {
-    console.log(editData)
-    setIsSaving(true);
-    try {
-      await onUpdate(editData);
-    } finally {
-      setIsSaving(false);
-    }
+    if (!file) return; // must upload something
+    const f = new FormData();
+    // server expects “title”, so we map queryText → title
+    f.append("title", editData.title);
+    f.append("description", editData.description || "");
+    f.append(
+      "school",
+      editData.school === "Others" ? editData.customSchool : editData.school
+    );
+    f.append("program", editData.program);
+    f.append("yearOfCreation", editData.yearOfCreation);
+    f.append("courseYear", editData.courseYear); // numeric string “1”-“5”
+    f.append("courseName", editData.courseName);
+    f.append("resourceType", editData.resourceType);
+    f.append("tags", JSON.stringify(editData.tags));
+    f.append("file", file);
+    await onFulfill(f);
   };
 
-  if (!upload) return null;
+  if (!request) return null;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="w-[95vw] max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Edit Upload</DialogTitle>
+          <DialogTitle>Fulfill Request</DialogTitle>
           <DialogDescription>
-            Make changes to the upload. Changes will be saved locally and
-            applied when you approve the upload.
+            {" "}
+            Update any incorrect details and upload the file.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-6 py-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Title */}
+            {/* Resource Name */}
             <div className="md:col-span-2 space-y-2">
-              <Label htmlFor="edit-title">Resource Title *</Label>
+              <Label>Name of the Resource</Label>
               <Input
-                id="edit-title"
                 value={editData.title}
                 onChange={(e) =>
-                  setEditData((prev) => ({ ...prev, title: e.target.value }))
+                  setEditData((prev) => ({
+                    ...prev,
+                    title: e.target.value,
+                  }))
                 }
-                placeholder="e.g., Object Oriented Programming Midterm 2023"
+                placeholder="e.g., Machine Learning Final Exam 2025 Papers"
               />
             </div>
 
-            {/* Description */}
+            {/* Resource Description */}
             <div className="md:col-span-2 space-y-2">
-              <Label htmlFor="edit-description">Description</Label>
-              <Textarea
-                id="edit-description"
-                value={editData.description}
+              <Label>Description of the Resource</Label>
+              <Input
+                value={editData.description || ""}
                 onChange={(e) =>
                   setEditData((prev) => ({
                     ...prev,
                     description: e.target.value,
                   }))
                 }
-                placeholder="Brief description of the resource content..."
-                rows={3}
+                placeholder="Give a brief description of the resource"
               />
             </div>
 
@@ -286,7 +284,7 @@ export function EditUploadDialog({
             </div>
 
             {/* Course Year */}
-            <div className="space-y-2">
+            {/* <div className="space-y-2">
               <Label>Course Year *</Label>
               <Select
                 value={editData.courseYear}
@@ -305,7 +303,7 @@ export function EditUploadDialog({
                   ))}
                 </SelectContent>
               </Select>
-            </div>
+            </div> */}
 
             {/* Course Name */}
             <div className="space-y-2">
@@ -388,42 +386,30 @@ export function EditUploadDialog({
               </div>
             </div>
 
-            {/* File Upload */}
-            <div className="md:col-span-2 space-y-2">
-              <Label>Replace File (Optional)</Label>
+            {/* Fulfillment File */}
+            <div className="space-y-2">
+              <Label>Fulfilment file *</Label>
               <Input
                 type="file"
-                onChange={(e) =>
-                  setEditData((prev) => ({
-                    ...prev,
-                    file: e.target.files?.[0],
-                  }))
-                }
-                accept=".pdf,.doc,.docx,.ppt,.pptx,.txt"
+                onChange={(e) => setFile(e.target.files?.[0] || null)}
               />
-              <p className="text-xs text-muted-foreground">
-                Leave empty to keep the current file. Supported formats: PDF,
-                DOC, DOCX, PPT, PPTX, TXT
-              </p>
             </div>
           </div>
         </div>
         <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={onClose} disabled={isSaving}>
+          <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={isSaving}>
-            {isSaving ? (
-              <>
-                <div className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4 mr-2" />
-                Save Changes
-              </>
+          <Button
+            onClick={handleSubmit}
+            disabled={actionLoading === `fulfill-${request.id}`}
+          >
+            {actionLoading === `fulfill-${request?.id}` && (
+              <Loader2 className="mr-2 animate-spin" />
             )}
+            {request?.fulfillUploadURL
+              ? "Replace file & Save"
+              : "Upload & Fulfill"}
           </Button>
         </div>
       </DialogContent>

@@ -4,9 +4,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
 }
 
 model Resource {
@@ -32,18 +31,19 @@ model Resource {
 }
 
 model Request {
-  id           String   @id @default(uuid())
-  queryText    String
-  requesterId  String?
-  status       String   @default("PENDING")
-  createdAt    DateTime @default(now())
-  courseName   String
-  courseYear   Int
-  email        String?
-  program      String?
-  resourceType String
-  school       String
-  tags         String[]
+  id               String   @id @default(uuid())
+  queryText        String
+  requesterId      String?
+  status           String   @default("PENDING")
+  createdAt        DateTime @default(now())
+  courseName       String
+  courseYear       Int
+  email            String[]
+  program          String?
+  resourceType     String
+  school           String
+  tags             String[]
+  fulfillUploadURL String?
 }
 
 model User {

@@ -31,6 +31,7 @@ import {
 import { UsersTable, type User } from "@/components/admin/users-table";
 import { EditUploadDialog } from "@/components/admin/edit-upload-dialog";
 import { EditRequestDialog } from "@/components/admin/edit-request-dialog";
+import { FulfillRequestDialog } from "@/components/admin/fulfill-request-dialog";
 
 interface AdminData {
   uploads: PendingUpload[];
@@ -61,11 +62,13 @@ export default function AdminPage() {
   const [editingUpload, setEditingUpload] = useState<PendingUpload | null>(
     null
   );
-  const [editingRequest, setEditingRequest] = useState<PendingRequest | null>(
+  const [fulfillingRequest, setFulfillingRequest] =
+    useState<PendingRequest | null>(null);
+  const [isEditUploadDialogOpen, setIsEditUploadDialogOpen] = useState(false);
+  const [isFulfillDialogOpen, setIsFulfillDialogOpen] = useState(false);
+  const [fulfillingReq, setFulfillingReq] = useState<PendingRequest | null>(
     null
   );
-  const [isEditUploadDialogOpen, setIsEditUploadDialogOpen] = useState(false);
-  const [isEditRequestDialogOpen, setIsEditRequestDialogOpen] = useState(false);
 
   // Store pending edits for uploads - only applied when approved
   const [pendingUploadEdits, setPendingUploadEdits] = useState<
@@ -79,12 +82,18 @@ export default function AdminPage() {
 
   // Update local state when data is fetched
   useEffect(() => {
+    console.log(data);
     if (data) {
       setUploads(data.uploads || []);
       setRequests(data.requests || []);
       setUsers(data.users || []);
     }
   }, [data]);
+
+  const handleAdminFulfil = (request: PendingRequest) => {
+    setFulfillingReq(request);
+    setIsEditUploadDialogOpen(true);
+  };
 
   const handleApproveUpload = async (id: string) => {
     setActionLoading(`approve-${id}`);
@@ -186,33 +195,25 @@ export default function AdminPage() {
     }
   };
 
-  const handleFulfillRequest = async (id: string, file: File) => {
+  const handleFulfillRequest = async (form: FormData) => {
+    if (!fulfillingRequest) return;
+    const id = fulfillingRequest.id;
     setActionLoading(`fulfill-${id}`);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const response = await fetch(`/api/admin/requests/${id}/fulfill`, {
+      const res = await fetch(`/api/admin/requests/${id}/fulfill`, {
         method: "POST",
-        body: formData,
+        body: form,
       });
-
-      if (!response.ok) {
-        throw new Error("Failed to fulfill request");
-      }
-
+      if (!res.ok) throw new Error("Failed");
+      // Optimistically mark as fulfilled
       setRequests((prev) =>
-        prev.map((request) =>
-          request.id === id
-            ? { ...request, status: "fulfilled" as const }
-            : request
-        )
+        prev.map((r) => (r.id === id ? { ...r, status: "fulfilled" } : r))
       );
-      toast.success("Request fulfilled successfully");
+      toast.success("Request fulfilled");
       mutate();
-    } catch (error) {
-      toast.error("Failed to fulfill request");
-      console.error("Error fulfilling request:", error);
+      setIsFulfillDialogOpen(false);
+    } catch (e) {
+      toast.error("Could not fulfil request");
     } finally {
       setActionLoading(null);
     }
@@ -260,9 +261,9 @@ export default function AdminPage() {
     setIsEditUploadDialogOpen(true);
   };
 
-  const handleEditRequest = (request: PendingRequest) => {
-    setEditingRequest(request);
-    setIsEditRequestDialogOpen(true);
+  const handleOpenFulfill = (req: PendingRequest) => {
+    setFulfillingRequest(req);
+    setIsFulfillDialogOpen(true);
   };
 
   // Updated to only store edits in state, not call API
@@ -304,56 +305,6 @@ export default function AdminPage() {
     setIsEditUploadDialogOpen(false);
     setEditingUpload(null);
     toast.success("Changes saved! Click 'Approve' to apply them.");
-  };
-
-  const handleUpdateRequest = async (editData: any) => {
-    if (!editingRequest) return;
-
-    setActionLoading(`update-request-${editingRequest.id}`);
-    try {
-      const response = await fetch(`/api/admin/requests/${editingRequest.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          queryText: editData.queryText,
-          school:
-            editData.school === "Others"
-              ? editData.customSchool
-              : editData.school,
-          program: editData.program,
-          yearOfCreation: Number.parseInt(editData.yearOfCreation),
-          courseYear: editData.courseYear,
-          courseName: editData.courseName,
-          resourceType: editData.resourceType,
-          tags: editData.tags,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to update request");
-      }
-
-      const updatedRequest = await response.json();
-      setRequests((prev) =>
-        prev.map((request) =>
-          request.id === editingRequest.id
-            ? { ...request, ...updatedRequest }
-            : request
-        )
-      );
-
-      setIsEditRequestDialogOpen(false);
-      setEditingRequest(null);
-      toast.success("Request updated successfully");
-      mutate();
-    } catch (error) {
-      toast.error("Failed to update request");
-      console.error("Error updating request:", error);
-    } finally {
-      setActionLoading(null);
-    }
   };
 
   // Helper function to get display data for upload (with pending edits applied)
@@ -409,7 +360,9 @@ export default function AdminPage() {
   const pendingUploads = uploads.filter(
     (upload) => upload.status === "pending"
   );
-  const openRequests = requests.filter((request) => request.status === "open");
+  const openRequests = requests.filter(
+    (request) => request.status === "pending"
+  );
 
   return (
     <div className="min-h-screen py-8 px-4">
@@ -434,17 +387,13 @@ export default function AdminPage() {
             <TabsTrigger value="uploads">
               Pending Uploads
               {!isLoading && pendingUploads.length > 0 && (
-                <Badge variant="secondary" className="ml-2">
-                  {pendingUploads.length}
-                </Badge>
+                <Badge variant="destructive">{pendingUploads.length}</Badge>
               )}
             </TabsTrigger>
             <TabsTrigger value="requests">
               Pending Requests
               {!isLoading && openRequests.length > 0 && (
-                <Badge variant="secondary" className="ml-2">
-                  {openRequests.length}
-                </Badge>
+                <Badge variant="destructive">{openRequests.length}</Badge>
               )}
             </TabsTrigger>
             <TabsTrigger value="users">Users</TabsTrigger>
@@ -498,8 +447,7 @@ export default function AdminPage() {
                 <RequestCard
                   key={request.id}
                   request={request}
-                  onFulfill={handleFulfillRequest}
-                  onEdit={handleEditRequest}
+                  onOpenFulfill={handleOpenFulfill}
                   actionLoading={actionLoading}
                 />
               ))
@@ -528,14 +476,11 @@ export default function AdminPage() {
           actionLoading={actionLoading}
         />
 
-        <EditRequestDialog
-          request={editingRequest}
-          isOpen={isEditRequestDialogOpen}
-          onClose={() => {
-            setIsEditRequestDialogOpen(false);
-            setEditingRequest(null);
-          }}
-          onUpdate={handleUpdateRequest}
+        <FulfillRequestDialog
+          request={fulfillingRequest}
+          isOpen={isFulfillDialogOpen}
+          onClose={() => setIsFulfillDialogOpen(false)}
+          onFulfill={handleFulfillRequest}
           actionLoading={actionLoading}
         />
       </div>

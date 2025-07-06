@@ -1,3 +1,4 @@
+// /admin/uploads/[id]/reject/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { db } from "@/lib/prisma";
@@ -27,6 +28,18 @@ export async function POST(
       Key: existing.fileUrl,
     })
   );
+
+  if (existing.linkedRequestId) {
+    const linkedRequest = await db.request.findUnique({
+      where: { id: existing.linkedRequestId },
+    });
+    if (linkedRequest) {
+      await db.request.update({
+      where: { id: existing.linkedRequestId },
+      data: { fulfillUploadURL: null },
+      });
+    }
+  }
 
   // Delete DB record
   await db.resource.delete({ where: { id } });

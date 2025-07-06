@@ -1,3 +1,4 @@
+// /admin/requests/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/prisma";
 
