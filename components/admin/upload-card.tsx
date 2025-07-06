@@ -49,7 +49,7 @@ export function UploadCardSkeleton() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex justify-between items-start">
+        <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-4">
           <div className="flex-1 space-y-3">
             <Skeleton className="h-6 w-3/4" />
             <Skeleton className="h-4 w-full" />
