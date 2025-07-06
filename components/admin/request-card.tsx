@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { Upload, Edit, Loader2, Eye, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
 
 export interface PendingRequest {
   id: string;
@@ -69,11 +70,39 @@ export function RequestCard({
   actionLoading,
   onOpenFulfill,
 }: RequestCardProps) {
-  console.log(request);
+  
   const [fulfillmentFile, setFulfillmentFile] = useState<File | null>(null);
   const [emailTemplate, setEmailTemplate] = useState("");
   const [isNotificationDialogOpen, setIsNotificationDialogOpen] =
     useState(false);
+  const [isPending, startTransition] = useTransition();
+
+  async function sendNotification() {
+    startTransition(async () => {
+      try {
+        const res = await fetch("/api/admin/notify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            requestId: request.id,
+            resourceId: request.fulfillUploadURL
+              ? request.id /* or linkedResourceId */
+              : null,
+            template: emailTemplate,
+          }),
+        });
+
+        if (!res.ok)
+          throw new Error((await res.json()).error ?? "Unknown error");
+
+        toast.success("E-mail sent to all subscribers 🎉");
+        setIsNotificationDialogOpen(false);
+        setEmailTemplate("");
+      } catch (err: any) {
+        toast.error(`Failed to send e-mail: ${err.message}`);
+      }
+    });
+  }
 
   const handleSendNotification = async () => {
     if (emailTemplate.trim()) {
@@ -173,13 +202,14 @@ export function RequestCard({
                   </DialogHeader>
                   <div className="space-y-4">
                     <div>
-                      <Label htmlFor="email-template">Email Template</Label>
-                      <textarea
-                        id="email-template"
-                        className="w-full h-32 p-3 border rounded-md resize-none"
-                        placeholder="Enter your email message here..."
+                      <Label htmlFor="template" className="mb-1 mt-4 block">
+                        Email text
+                      </Label>
+                      <Input
+                        id="template"
                         value={emailTemplate}
                         onChange={(e) => setEmailTemplate(e.target.value)}
+                        placeholder="Optional personal message…"
                       />
                     </div>
                     <div className="text-sm text-muted-foreground">
@@ -187,23 +217,29 @@ export function RequestCard({
                         <strong>Recipients:</strong> {request.email.join(", ")}
                       </p>
                     </div>
-                    <Button
-                      onClick={handleSendNotification}
-                      disabled={
-                        !emailTemplate.trim() ||
-                        actionLoading === `notify-${request.id}`
-                      }
-                      className="w-full"
-                    >
-                      {actionLoading === `notify-${request.id}` ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Sending...
-                        </>
-                      ) : (
-                        "Send Notification"
-                      )}
-                    </Button>
+                    <div className="mt-6 flex justify-end gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => setIsNotificationDialogOpen(false)}
+                        disabled={isPending}
+                      >
+                        Cancel
+                      </Button>
+
+                      <Button
+                        onClick={sendNotification}
+                        disabled={isPending || !emailTemplate.trim()}
+                      >
+                        {isPending ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Mail className="h-4 w-4 mr-1" />
+                        )}
+                        {isPending
+                          ? "Sending…"
+                          : `Send (${request.email.length})`}
+                      </Button>
+                    </div>
                   </div>
                 </DialogContent>
               </Dialog>
