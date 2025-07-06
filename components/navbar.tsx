@@ -2,17 +2,38 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Menu, User, LogOut, Settings } from "lucide-react";
+import {
+  Menu,
+  User,
+  LogOut,
+  Settings,
+  Home,
+  Search,
+  Upload,
+  MessageSquare,
+  Shield,
+  UserCircle,
+  ChevronDown,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import Theme from "./Theme";
 import Image from "next/image";
 import Logo from "@/public/logo.png";
@@ -24,18 +45,23 @@ export function Navbar() {
   const user = session?.user;
 
   const navLinks = [
-    { href: "/", label: "Home" },
-    { href: "/search", label: "Search" },
-    { href: "/upload", label: "Upload" },
-    { href: "/request", label: "Request" },
+    { href: "/", label: "Home", icon: Home },
+    { href: "/search", label: "Search", icon: Search },
+    { href: "/upload", label: "Upload", icon: Upload },
+    { href: "/request", label: "Request", icon: MessageSquare },
   ];
 
+  const adminLinks = [];
+  const userLinks = [];
+
   if (user?.role === "ADMIN") {
-    navLinks.push({ href: "/admin", label: "Admin" });
+    adminLinks.push({ href: "/admin", label: "Admin Panel", icon: Shield });
   }
 
   if (user?.role === "ADMIN" || user?.role === "MEMBER") {
-    navLinks.push({ href: "/profile", label: "Profile" });
+    userLinks.push(
+      { href: "/profile", label: "Profile", icon: UserCircle },
+    );
   }
 
   const handleLogout = async () => {
@@ -53,37 +79,151 @@ export function Navbar() {
       console.error("Error logging out:", err);
     }
   };
-  
+
+  const getUserInitials = (name?: string, email?: string) => {
+    if (name) {
+      return name
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2);
+    }
+    if (email) {
+      return email.slice(0, 2).toUpperCase();
+    }
+    return "U";
+  };
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
-          <div className="flex items-center space-x-2">
-            <Image src={Logo} alt="Logo" className="h-12 w-12" />
-            <span className="text-xl tracking-wider">UniVault</span>
-          </div>
+          <Link
+            href="/"
+            className="flex items-center space-x-3 hover:opacity-80 transition-opacity"
+          >
+            <Image
+              src={Logo || "/placeholder.svg"}
+              alt="UniVault Logo"
+              className="h-10 w-10"
+            />
+            <div className="flex flex-col">
+              <span className="text-xl font-bold tracking-tight">UniVault</span>
+              <span className="text-xs text-muted-foreground hidden sm:block">
+                Resource Hub
+              </span>
+            </div>
+          </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-8">
-            {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="text-foreground/80 hover:text-foreground transition-colors"
-              >
-                {link.label}
-              </Link>
-            ))}
+          <div className="hidden lg:flex items-center space-x-1">
+            {navLinks.map((link) => {
+              const Icon = link.icon;
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium text-foreground/70 hover:text-foreground hover:bg-accent transition-all duration-200"
+                >
+                  <Icon className="h-4 w-4" />
+                  <span>{link.label}</span>
+                </Link>
+              );
+            })}
+
+            {adminLinks.map((link) => {
+              const Icon = link.icon;
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium text-foreground/70 hover:text-foreground hover:bg-accent transition-all duration-200"
+                >
+                  <Icon className="h-4 w-4" />
+                  <span>{link.label}</span>
+                </Link>
+              );
+            })}
           </div>
 
-          {/* User Menu / Auth Buttons */}
-          <div className="hidden md:flex items-center space-x-4">
+          {/* Desktop User Menu / Auth Buttons */}
+          <div className="hidden md:flex items-center space-x-3">
             {user ? (
-              <Button variant="destructive" onClick={handleLogout}>
-                Logout
-              </Button>
+              <div className="flex items-center space-x-3">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      className="flex items-center space-x-2 h-10 px-3"
+                    >
+                      <Avatar className="h-8 w-8">
+                        {/* <AvatarImage
+                          src={user.profilePicture || "/placeholder.svg"}
+                          alt={user.username || user.email}
+                        />
+                        <AvatarFallback className="text-xs">
+                          {getUserInitials(user.username, user.email)}
+                        </AvatarFallback> */}
+                      </Avatar>
+                      <div className="hidden lg:flex flex-col items-start">
+                        <span className="text-sm font-medium">
+                          {user.email || "User"}
+                        </span>
+                        <div className="flex items-center space-x-1">
+                          <Badge
+                            variant={
+                              user.role === "ADMIN" ? "default" : "secondary"
+                            }
+                            className="text-xs px-1.5 py-0"
+                          >
+                            {user.role}
+                          </Badge>
+                        </div>
+                      </div>
+                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuLabel>
+                      <div className="flex flex-col space-y-1">
+                        <p className="text-sm font-medium">
+                          {user.email || "User"}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {user.email}
+                        </p>
+                      </div>
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+
+                    {userLinks.map((link) => {
+                      const Icon = link.icon;
+                      return (
+                        <DropdownMenuItem key={link.href} asChild>
+                          <Link
+                            href={link.href}
+                            className="flex items-center space-x-2"
+                          >
+                            <Icon className="h-4 w-4" />
+                            <span>{link.label}</span>
+                          </Link>
+                        </DropdownMenuItem>
+                      );
+                    })}
+
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={handleLogout}
+                      className="text-red-600 focus:text-red-600"
+                    >
+                      <LogOut className="h-4 w-4 mr-2" />
+                      <span>Logout</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             ) : (
               <div className="flex items-center space-x-2">
                 <Button variant="ghost" asChild>
@@ -98,42 +238,160 @@ export function Navbar() {
           </div>
 
           {/* Mobile Menu */}
-          <Sheet open={isOpen} onOpenChange={setIsOpen}>
-            <SheetTrigger asChild className="md:hidden">
-              <Button variant="ghost" size="icon">
-                <Menu className="h-5 w-5" />
-                <span className="sr-only">Toggle menu</span>
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="right" className="w-[300px] sm:w-[400px]">
-              <div className="flex flex-col space-y-4 mt-4">
-                {navLinks.map((link) => (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    className="text-foreground/80 hover:text-foreground transition-colors py-2"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    {link.label}
-                  </Link>
-                ))}
-                {user ? (
-                  <Button variant="destructive" onClick={handleLogout}>
-                    Logout
-                  </Button>
-                ) : (
-                  <div className="flex items-center space-x-2">
-                    <Button variant="ghost" asChild>
-                      <Link href="/login">Login</Link>
-                    </Button>
-                    <Button asChild>
-                      <Link href="/signup">Sign Up</Link>
-                    </Button>
+          <div className="flex items-center space-x-2 md:hidden">
+            <Theme />
+            <Sheet open={isOpen} onOpenChange={setIsOpen}>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <Menu className="h-5 w-5" />
+                  <span className="sr-only">Toggle menu</span>
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-[300px] sm:w-[350px]">
+                <SheetHeader>
+                  <SheetTitle className="flex items-center space-x-2">
+                    <Image
+                      src={Logo || "/placeholder.svg"}
+                      alt="UniVault"
+                      className="h-8 w-8"
+                    />
+                    <span>UniVault</span>
+                  </SheetTitle>
+                </SheetHeader>
+
+                <div className="flex flex-col space-y-6 mt-6">
+                  {/* User Info Section */}
+                  {user && (
+                    <div className="flex items-center space-x-3 p-4 bg-accent/50 rounded-lg">
+                      {/* <Avatar className="h-12 w-12">
+                        <AvatarImage
+                          src={user.profilePicture || "/placeholder.svg"}
+                          alt={user.username || user.email}
+                        />
+                        <AvatarFallback>
+                          {getUserInitials(user.username, user.email)}
+                        </AvatarFallback>
+                      </Avatar> */}
+                      <div className="flex flex-col">
+                        <span className="font-medium">
+                          {user.email || "User"}
+                        </span>
+                        <span className="text-sm text-muted-foreground">
+                          {user.email}
+                        </span>
+                        <Badge
+                          variant={
+                            user.role === "ADMIN" ? "default" : "secondary"
+                          }
+                          className="text-xs w-fit mt-1"
+                        >
+                          {user.role}
+                        </Badge>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Navigation Links */}
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-2">
+                      Navigation
+                    </h3>
+                    {navLinks.map((link) => {
+                      const Icon = link.icon;
+                      return (
+                        <Link
+                          key={link.href}
+                          href={link.href}
+                          className="flex items-center space-x-3 px-3 py-3 rounded-md text-foreground hover:bg-accent transition-colors"
+                          onClick={() => setIsOpen(false)}
+                        >
+                          <Icon className="h-5 w-5" />
+                          <span className="font-medium">{link.label}</span>
+                        </Link>
+                      );
+                    })}
                   </div>
-                )}
-              </div>
-            </SheetContent>
-          </Sheet>
+
+                  {/* Admin Links */}
+                  {adminLinks.length > 0 && (
+                    <div className="space-y-1">
+                      <Separator />
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-2">
+                        Admin
+                      </h3>
+                      {adminLinks.map((link) => {
+                        const Icon = link.icon;
+                        return (
+                          <Link
+                            key={link.href}
+                            href={link.href}
+                            className="flex items-center space-x-3 px-3 py-3 rounded-md text-foreground hover:bg-accent transition-colors"
+                            onClick={() => setIsOpen(false)}
+                          >
+                            <Icon className="h-5 w-5" />
+                            <span className="font-medium">{link.label}</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* User Account Links */}
+                  {user && userLinks.length > 0 && (
+                    <div className="space-y-1">
+                      <Separator />
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-2">
+                        Account
+                      </h3>
+                      {userLinks.map((link) => {
+                        const Icon = link.icon;
+                        return (
+                          <Link
+                            key={link.href}
+                            href={link.href}
+                            className="flex items-center space-x-3 px-3 pt-3 rounded-md text-foreground hover:bg-accent transition-colors"
+                            onClick={() => setIsOpen(false)}
+                          >
+                            <Icon className="h-5 w-5" />
+                            <span className="font-medium">{link.label}</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {user ? (
+                    <Button
+                      variant="destructive"
+                      onClick={handleLogout}
+                      className="w-fit ml-2 justify-start"
+                      size="lg"
+                    >
+                      <LogOut className="h-4 w-4 mr-2" />
+                      Logout
+                    </Button>
+                  ) : (
+                    <div className="flex">
+                      <Button
+                        variant="outline"
+                        asChild
+                        className="w-fit mx-2 bg-transparent"
+                      >
+                        <Link href="/login" onClick={() => setIsOpen(false)}>
+                          <User className="h-4 w-4 mr-2" />
+                          Login
+                        </Link>
+                      </Button>
+                      <Button asChild className="w-fit mx-2">
+                        <Link href="/signup" onClick={() => setIsOpen(false)}>
+                          Sign Up
+                        </Link>
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </SheetContent>
+            </Sheet>
+          </div>
         </div>
       </div>
     </nav>
