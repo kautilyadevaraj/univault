@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Upload,
   X,
@@ -99,6 +99,18 @@ interface UploadFormData {
   linkedRequestId: string | null;
 }
 
+interface PendingRequest {
+  id: string;
+  queryText: string;
+  school: string;
+  program?: string | null;
+  yearOfCreation?: number | null;
+  courseYear: number;
+  courseName: string;
+  resourceType: string;
+  createdAt: string;
+}
+
 const schools = [
   { value: "SoCSE", label: "School of Computer Science & Engineering" },
   { value: "SDI", label: "School of Design & Innovation" },
@@ -152,6 +164,29 @@ export default function UploadPage() {
   const [linkType, setLinkType] = useState<"none" | "existing">("none");
   const [searchQuery, setSearchQuery] = useState("");
   const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false);
+  const [requests, setRequests] = useState<PendingRequest[]>([]);
+  const [isReqLoading, setIsReqLoading] = useState(true);
+  const [reqError, setReqError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadPendingRequests() {
+      try {
+        setIsReqLoading(true);
+        const res = await fetch("/api/request");
+        if (!res.ok) throw new Error("Failed to load requests");
+        const data: PendingRequest[] = await res.json();
+
+        setRequests(data);
+      } catch (err: any) {
+        setReqError(err.message ?? "Unknown error");
+        toast.error("Unable to load requests right now");
+      } finally {
+        setIsReqLoading(false);
+      }
+    }
+
+    loadPendingRequests();
+  }, []);
 
   const suggestedTags = [
     "Computer Science",
@@ -170,12 +205,12 @@ export default function UploadPage() {
   ];
 
   const filteredRequests = searchQuery
-    ? mockRequests.filter(
+    ? requests.filter(
         (req) =>
           req.queryText.toLowerCase().includes(searchQuery.toLowerCase()) ||
           req.courseName.toLowerCase().includes(searchQuery.toLowerCase())
       )
-    : mockRequests;
+    : requests;
 
   const handleAddTag = (tag: string) => {
     if (tag && !formData.tags.includes(tag)) {
@@ -218,27 +253,29 @@ export default function UploadPage() {
   };
 
   const handleLinkRequest = (requestId: string) => {
-    const selectedRequest = mockRequests.find((req) => req.id === requestId);
+    const selectedRequest = requests.find((req) => req.id === requestId);
+    if (!selectedRequest) return;
 
-    if (selectedRequest) {
-      setFormData((prev) => ({
-        ...prev,
-        linkedRequestId: requestId,
-        school: selectedRequest.school,
-        program: selectedRequest.program,
-        yearOfCreation: selectedRequest.yearOfCreation.toString(),
-        courseYear: selectedRequest.courseYear,
-        courseName: selectedRequest.courseName,
-        resourceType: selectedRequest.resourceType,
-        title: selectedRequest.queryText,
-      }));
+    setFormData((prev) => ({
+      ...prev,
+      linkedRequestId: requestId,
+      school: selectedRequest.school,
+      program: selectedRequest.program ?? "",
+      yearOfCreation: (
+        selectedRequest.yearOfCreation ?? currentYear
+      ).toString(),
+      courseYear: `${selectedRequest.courseYear}th Year`, // map 1 → "1st Year" if you keep human text
+      courseName: selectedRequest.courseName,
+      resourceType: selectedRequest.resourceType,
+      title: selectedRequest.queryText,
+    }));
 
-      setIsRequestDialogOpen(false);
-      toast.success(
-        "Request linked successfully! Form fields have been pre-filled."
-      );
-    }
+    setIsRequestDialogOpen(false);
+    toast.success(
+      "Request linked successfully! Form fields have been pre-filled."
+    );
   };
+  
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -333,7 +370,7 @@ export default function UploadPage() {
 
   const getLinkedRequestDetails = () => {
     if (!formData.linkedRequestId) return null;
-    return mockRequests.find((req) => req.id === formData.linkedRequestId);
+    return requests.find((req) => req.id === formData.linkedRequestId);
   };
 
   const linkedRequest = getLinkedRequestDetails();
@@ -524,7 +561,7 @@ export default function UploadPage() {
                               <span>
                                 {formData.linkedRequestId
                                   ? `Linked: ${
-                                      mockRequests.find(
+                                      requests.find(
                                         (req) =>
                                           req.id === formData.linkedRequestId
                                       )?.queryText
@@ -948,16 +985,7 @@ export default function UploadPage() {
                     </div>
                   </div>
 
-                  {/* Upload Progress */}
-                  {isUploading && (
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span>Uploading...</span>
-                        <span>{uploadProgress}%</span>
-                      </div>
-                      <Progress value={uploadProgress} />
-                    </div>
-                  )}
+                  
 
                   {/* Submit Button */}
                   <Button

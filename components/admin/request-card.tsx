@@ -75,24 +75,6 @@ export function RequestCard({
   const [isNotificationDialogOpen, setIsNotificationDialogOpen] =
     useState(false);
 
-  // const handleFulfill = async () => {
-  //   if (!fulfillmentFile) return;
-
-  //   const fd = new FormData();
-  //   fd.append("file", fulfillmentFile); // required
-  //   fd.append("title", request.request);
-  //   fd.append("description", request.request);
-  //   fd.append("school", request.school || "");
-  //   fd.append("program", request.program || "");
-  //   fd.append("yearOfCreation", request.yearOfCreation?.toString() || "");
-  //   fd.append("courseYear", request.courseYear || "");
-  //   fd.append("courseName", request.courseName || "");
-  //   fd.append("resourceType", request.resourceType || "Other");
-  //   fd.append("tags", JSON.stringify(request.tags || []));
-  //   await onFulfill(fd);
-  //   setFulfillmentFile(null);
-  // };
-
   const handleSendNotification = async () => {
     if (emailTemplate.trim()) {
       // await onSendNotification(request.id, emailTemplate);
@@ -130,7 +112,7 @@ export function RequestCard({
                 <Badge variant="secondary" className="text-xs">
                   File uploaded by a user
                 </Badge>
-              )}             
+              )}
               {request.email && request.email.length > 0 && (
                 <Badge
                   variant="outline"
@@ -141,7 +123,12 @@ export function RequestCard({
               )}
             </div>
             <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-              <span>Requested by: {request.requester}</span>
+              <span>
+                Requested by:{" "}
+                {request.requester && request.requester.length > 0
+                  ? request.requester
+                  : "No one."}
+              </span>
               <span>
                 Date: {new Date(request.requestDate).toLocaleDateString()}
               </span>
@@ -161,17 +148,6 @@ export function RequestCard({
             )}
           </div>
           <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-            {/* <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onFulfill(request)}
-              disabled={actionLoading?.startsWith("update-request")}
-              className="w-full sm:w-auto"
-            >
-              <Edit className="h-4 w-4 mr-2" />
-              Edit
-            </Button> */}
-
             {request.email && request.email.length > 0 && (
               <Dialog
                 open={isNotificationDialogOpen}
@@ -238,7 +214,8 @@ export function RequestCard({
               onClick={() => onOpenFulfill(request)}
               className="h-8"
             >
-              <Upload/>{request.fulfillUploadURL ? "Replace File" : "Fulfill Request"}
+              <Upload />
+              {request.fulfillUploadURL ? "Replace File" : "Fulfill Request"}
             </Button>
           </div>
         </div>
