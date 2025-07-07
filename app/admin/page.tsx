@@ -52,6 +52,7 @@ interface PendingUploadEdit {
   resourceType: string;
   tags: string[];
   file?: File;
+  fileUrl: string;
 }
 
 export default function AdminPage() {
@@ -82,7 +83,6 @@ export default function AdminPage() {
 
   // Update local state when data is fetched
   useEffect(() => {
-    console.log(data);
     if (data) {
       setUploads(data.uploads || []);
       setRequests(data.requests || []);

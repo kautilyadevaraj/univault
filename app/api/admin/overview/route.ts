@@ -47,6 +47,7 @@ export async function GET() {
       courseName: u.courseName ?? "",
       resourceType: u.resourceType ?? "",
       linkedRequestId: u.linkedRequestId,
+      fileUrl: u.fileUrl
     }));
 
     //
