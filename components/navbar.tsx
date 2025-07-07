@@ -158,14 +158,14 @@ export function Navbar() {
                       variant="ghost"
                       className="flex items-center space-x-2 h-10 px-3"
                     >
-                      <Avatar className="h-8 w-8">
-                        {/* <AvatarImage
-                          src={user.profilePicture || "/placeholder.svg"}
-                          alt={user.username || user.email}
+                      <Avatar className="h-8 w-8 border-2">
+                        <AvatarImage
+                          src={"/placeholder.svg"}
+                          alt={user.email}
                         />
                         <AvatarFallback className="text-xs">
-                          {getUserInitials(user.username, user.email)}
-                        </AvatarFallback> */}
+                          {getUserInitials(user.email)}
+                        </AvatarFallback>
                       </Avatar>
                       <div className="hidden lg:flex flex-col items-start">
                         <span className="text-sm font-medium">
@@ -263,15 +263,15 @@ export function Navbar() {
                   {/* User Info Section */}
                   {user && (
                     <div className="flex items-center space-x-3 p-4 bg-accent/50 rounded-lg">
-                      {/* <Avatar className="h-12 w-12">
+                      <Avatar className="h-12 w-12">
                         <AvatarImage
-                          src={user.profilePicture || "/placeholder.svg"}
-                          alt={user.username || user.email}
+                          src={"/placeholder.svg"}
+                          alt={user.email}
                         />
                         <AvatarFallback>
-                          {getUserInitials(user.username, user.email)}
+                          {getUserInitials(user.email)}
                         </AvatarFallback>
-                      </Avatar> */}
+                      </Avatar>
                       <div className="flex flex-col">
                         <span className="font-medium">
                           {user.email || "User"}
