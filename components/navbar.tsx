@@ -263,7 +263,7 @@ export function Navbar() {
                   {/* User Info Section */}
                   {user && (
                     <div className="flex items-center space-x-3 p-4 bg-accent/50 rounded-lg">
-                      <Avatar className="h-12 w-12">
+                      <Avatar className="h-12 w-12 border-2">
                         <AvatarImage
                           src={"/placeholder.svg"}
                           alt={user.email}

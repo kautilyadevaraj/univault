@@ -325,9 +325,7 @@ export default function SearchPage() {
         url = data.url;
         setPreviewUrls((prev) => ({ ...prev, [resource.id]: url }));
       }
-
       window.open(url, "_blank");
-      toast.success("Download started!");
     } catch (err) {
       console.error("Download failed", err);
       toast.error("Failed to download resource. Please try again.");
