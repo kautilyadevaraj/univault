@@ -4,8 +4,8 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model Resource {
@@ -38,36 +38,34 @@ model Request {
   createdAt        DateTime @default(now())
   courseName       String
   courseYear       Int
-  email            String[]
   program          String?
   resourceType     String
   school           String
   tags             String[]
   fulfillUploadURL String?
+  email            String[]
 }
 
 model User {
-  id             String     @id @default(uuid())
-  email          String     @unique
-  password       String
-  role           String     @default("MEMBER")
-  createdAt      DateTime   @default(now())
-  graduatingYear Int?
-  program        String?
-  school         String?
-  username       String     @unique
-  yearOfStudy    Int?
-  resources      Resource[]
-
-  profileVisibility     String     @default("PUBLIC") // PUBLIC, PRIVATE, SCHOOL_ONLY
-  showEmail             Boolean    @default(false)
-  showSchoolInfo        Boolean    @default(true)
-  showGraduationYear    Boolean    @default(true)
-  showResourceCount     Boolean    @default(true)
-  showContributionScore Boolean    @default(true)
-  
-  // Additional profile fields
+  id                    String     @id @default(uuid())
+  email                 String     @unique
+  role                  String     @default("MEMBER")
+  createdAt             DateTime   @default(now())
+  graduatingYear        Int?
+  program               String?
+  school                String?
+  username              String?    @unique
+  yearOfStudy           Int?
   bio                   String?
   profilePicture        String?
+  profileVisibility     String     @default("PUBLIC")
+  showContributionScore Boolean    @default(true)
+  showEmail             Boolean    @default(false)
+  showGraduationYear    Boolean    @default(true)
+  showResourceCount     Boolean    @default(true)
+  showSchoolInfo        Boolean    @default(true)
   socialLinks           String[]   @default([])
+  authId                String?    @unique
+  resources             Resource[]
+  provider              String?
 }

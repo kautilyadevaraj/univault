@@ -16,8 +16,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { signUpWithGoogle } from "@/utils/supabase/actions";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -227,7 +229,7 @@ export default function SignupPage() {
             </Button>
           </form>
 
-          {/* <div className="relative">
+          <div className="relative">
             <div className="absolute inset-0 flex items-center">
               <Separator className="w-full" />
             </div>
@@ -236,9 +238,13 @@ export default function SignupPage() {
                 Or continue with
               </span>
             </div>
-          </div> */}
+          </div>
 
-          {/* <Button variant="outline" className="w-full bg-transparent">
+          <Button
+            variant="outline"
+            className="w-full bg-transparent"
+            onClick={signUpWithGoogle}
+          >
             <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
               <path
                 d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -258,7 +264,7 @@ export default function SignupPage() {
               />
             </svg>
             Continue with Google
-          </Button> */}
+          </Button>
 
           <div className="text-center text-sm">
             Already have an account?{" "}

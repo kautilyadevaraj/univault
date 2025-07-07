@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   Menu,
@@ -38,10 +38,29 @@ import Theme from "./Theme";
 import Image from "next/image";
 import Logo from "@/public/logo.png";
 import { useSession } from "@/lib/hooks/session";
+import { logout } from "@/utils/supabase/actions";
+import { createClient } from "@/utils/supabase/client";
+import type { Session } from "@supabase/supabase-js";
+
+const supabase = createClient();
 
 export function Navbar() {
+  const [session, setSession] = useState<Session | null>(null);
+    useEffect(() => {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        setSession(session);
+      });
+  
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange((_event, session) => {
+        setSession(session);
+      });
+  
+      return () => subscription.unsubscribe();
+    }, []);
+  console.log(session)
   const [isOpen, setIsOpen] = useState(false);
-  const session = useSession();
   const user = session?.user;
 
   const navLinks = [
@@ -52,16 +71,10 @@ export function Navbar() {
   ];
 
   const adminLinks = [];
-  const userLinks = [];
+  const userLinks = [{ href: "/profile", label: "Profile", icon: UserCircle }];
 
   if (user?.role === "ADMIN") {
     adminLinks.push({ href: "/admin", label: "Admin Panel", icon: Shield });
-  }
-
-  if (user?.role === "ADMIN" || user?.role === "MEMBER") {
-    userLinks.push(
-      { href: "/profile", label: "Profile", icon: UserCircle },
-    );
   }
 
   const handleLogout = async () => {
@@ -160,7 +173,7 @@ export function Navbar() {
                     >
                       <Avatar className="h-8 w-8 border-2">
                         <AvatarImage
-                          src={"/placeholder.svg"}
+                          src={user.user_metadata.avatar_url}
                           alt={user.email}
                         />
                         <AvatarFallback className="text-xs">
@@ -169,18 +182,8 @@ export function Navbar() {
                       </Avatar>
                       <div className="hidden lg:flex flex-col items-start">
                         <span className="text-sm font-medium">
-                          {user.email || "User"}
+                          {user.user_metadata.full_name}
                         </span>
-                        <div className="flex items-center space-x-1">
-                          <Badge
-                            variant={
-                              user.role === "ADMIN" ? "default" : "secondary"
-                            }
-                            className="text-xs px-1.5 py-0"
-                          >
-                            {user.role}
-                          </Badge>
-                        </div>
                       </div>
                       <ChevronDown className="h-4 w-4 text-muted-foreground" />
                     </Button>
@@ -215,7 +218,7 @@ export function Navbar() {
 
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
-                      onClick={handleLogout}
+                      onClick={logout}
                       className="text-red-600 focus:text-red-600"
                     >
                       <LogOut className="h-4 w-4 mr-2" />
@@ -279,14 +282,6 @@ export function Navbar() {
                         <span className="text-sm text-muted-foreground">
                           {user.email}
                         </span>
-                        <Badge
-                          variant={
-                            user.role === "ADMIN" ? "default" : "secondary"
-                          }
-                          className="text-xs w-fit mt-1"
-                        >
-                          {user.role}
-                        </Badge>
                       </div>
                     </div>
                   )}
