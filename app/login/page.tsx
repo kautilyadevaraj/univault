@@ -76,10 +76,10 @@ export default function LoginPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">Welcome back</CardTitle>
-          <CardDescription>Sign in to your UniVault account</CardDescription>
+          <CardDescription>Sign in / Sign Up to your UniVault account</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <form onSubmit={handleSubmit} className="space-y-4">
+          {/* <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -149,7 +149,7 @@ export default function LoginPage() {
                 Or continue with
               </span>
             </div>
-          </div>
+          </div> */}
 
           <Button
             variant="outline"
@@ -177,12 +177,12 @@ export default function LoginPage() {
             Continue with Google
           </Button>
 
-          <div className="text-center text-sm">
+          {/* <div className="text-center text-sm">
             Don't have an account?{" "}
             <Link href="/signup" className="text-primary hover:underline">
               Sign up
             </Link>
-          </div>
+          </div> */}
         </CardContent>
       </Card>
     </div>

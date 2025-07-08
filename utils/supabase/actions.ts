@@ -71,10 +71,10 @@ export async function logout() {
   const { error } = await supabase.auth.signOut();
   if (error) {
     console.log("Error logging out", error);
-    redirect("/error");
+    return { error: error.message };
   }
   revalidatePath("/", "layout");
-  redirect("/");
+  return { success: true };
 }
 
 export async function syncUserProfile() {

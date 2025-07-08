@@ -5,7 +5,7 @@ import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 import { randomUUID } from "crypto";
 import { generateEmbedding, createResourceText } from "@/lib/gemini";
-import type { Resource } from "@/lib/generated/prisma";
+import { createClient } from "@/utils/supabase/server";
 
 interface EmbeddingData {
   title: string;
@@ -42,9 +42,9 @@ export async function POST(req: NextRequest) {
     const yearOfCreation = formData.get("yearOfCreation")
       ? parseInt(formData.get("yearOfCreation")!.toString(), 10)
       : null;
-      const courseYear = formData.get("courseYear")
-        ? parseInt(formData.get("courseYear")!.toString(), 10)
-        : null;    
+    const courseYear = formData.get("courseYear")
+      ? parseInt(formData.get("courseYear")!.toString(), 10)
+      : null;
     const courseName = formData.get("courseName")?.toString() ?? null;
     const resourceType = formData.get("resourceType")?.toString() ?? "";
     // assume tags were sent as a JSON string
@@ -59,19 +59,37 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
-    // determine uploaderId from JWT (if present)
+    // Get user from Supabase auth
     let uploaderId: string | null = null;
-    const token = (await cookies()).get("univault_token")?.value;
-    if (token) {
-      try {
-        const { payload } = await jwtVerify(
-          token,
-          new TextEncoder().encode(JWT_SECRET)
-        );
-        uploaderId = (payload as any).userId;
-      } catch {
-        // invalid token → treat as anonymous
+    const supabase = await createClient();
+
+    try {
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser();
+
+      if (error) {
+        console.error("Auth error:", error);
       }
+
+      if (user) {
+        // Get user profile from your custom User table
+        const { data: userProfile, error: profileError } = await supabase
+          .from("User")
+          .select("id")
+          .eq("authId", user.id)
+          .single();
+
+        if (profileError) {
+          console.error("Profile fetch error:", profileError);
+        } else if (userProfile) {
+          uploaderId = userProfile.id;
+        }
+      }
+    } catch (authError) {
+      console.error("Authentication check failed:", authError);
+      // Continue as anonymous upload
     }
 
     // generate a random filename with same extension

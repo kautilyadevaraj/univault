@@ -44,44 +44,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import Link from "next/link";
-import { useSession } from "@/lib/hooks/session";
-
-// Mock requests data - replace with actual API call
-const mockRequests = [
-  {
-    id: "req-1",
-    queryText: "Data Structures Final Exam 2023",
-    school: "SoCSE",
-    program: "B.Tech",
-    yearOfCreation: 2023,
-    courseYear: "3rd Year",
-    courseName: "Data Structures and Algorithms",
-    resourceType: "Past Papers",
-    createdAt: "2024-01-15T10:00:00Z",
-  },
-  {
-    id: "req-2",
-    queryText: "Object Oriented Programming Notes",
-    school: "SoCSE",
-    program: "BCA",
-    yearOfCreation: 2023,
-    courseYear: "2nd Year",
-    courseName: "Object Oriented Programming with Java",
-    resourceType: "Notes",
-    createdAt: "2024-01-20T14:30:00Z",
-  },
-  {
-    id: "req-3",
-    queryText: "Database Systems Lab Manual",
-    school: "SoCSE",
-    program: "B.Tech",
-    yearOfCreation: 2023,
-    courseYear: "3rd Year",
-    courseName: "Database Management Systems",
-    resourceType: "Lab Manual",
-    createdAt: "2024-01-10T09:15:00Z",
-  },
-];
+import { useUserProfile } from "@/lib/hooks/useUserProfile";
 
 interface UploadFormData {
   title: string;
@@ -140,7 +103,8 @@ const courseYears = [
 ];
 
 export default function UploadPage() {
-  const session = useSession();
+  const { user, profile, loading } = useUserProfile();
+  console.log(user)
   const [formData, setFormData] = useState<UploadFormData>({
     title: "",
     description: "",
@@ -189,19 +153,14 @@ export default function UploadPage() {
   }, []);
 
   const suggestedTags = [
-    "Computer Science",
-    "Mathematics",
     "Midterm",
     "Final",
     "Quiz",
     "Notes",
     "Past Papers",
     "Study Guide",
+    "2025",
     "2024",
-    "2023",
-    "2022",
-    "Semester 1",
-    "Semester 2",
   ];
 
   const filteredRequests = searchQuery
@@ -281,7 +240,7 @@ export default function UploadPage() {
     e.preventDefault();
 
     // Authentication check
-    if (!formData.uploadAnonymously && !session?.isAuthenticated) {
+    if (!formData.uploadAnonymously && !user) {
       toast.error("Please log in to upload with your profile");
       return;
     }
@@ -494,7 +453,7 @@ export default function UploadPage() {
                     </div>
 
                     {!formData.uploadAnonymously &&
-                      !session?.isAuthenticated && (
+                      !user && (
                         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                           <div className="flex items-center gap-2 text-yellow-800">
                             <User className="h-4 w-4" />
@@ -996,7 +955,7 @@ export default function UploadPage() {
                       isUploading ||
                       !formData.title ||
                       !formData.file ||
-                      (!formData.uploadAnonymously && !session?.isAuthenticated)
+                      (!formData.uploadAnonymously && !user)
                     }
                   >
                     {isUploading ? "Uploading..." : "Upload for Approval"}

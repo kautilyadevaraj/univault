@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import {
   Menu,
   User,
   LogOut,
-  Settings,
   Home,
   Search,
   Upload,
@@ -14,6 +13,7 @@ import {
   Shield,
   UserCircle,
   ChevronDown,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,31 +37,13 @@ import { Separator } from "@/components/ui/separator";
 import Theme from "./Theme";
 import Image from "next/image";
 import Logo from "@/public/logo.png";
-import { useSession } from "@/lib/hooks/session";
-import { logout } from "@/utils/supabase/actions";
-import { createClient } from "@/utils/supabase/client";
-import type { Session } from "@supabase/supabase-js";
-
-const supabase = createClient();
+import { useUserProfile } from "@/lib/hooks/useUserProfile";
+import { useAuth } from "@/lib/hooks/useAuth";
 
 export function Navbar() {
-  const [session, setSession] = useState<Session | null>(null);
-    useEffect(() => {
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        setSession(session);
-      });
-  
-      const {
-        data: { subscription },
-      } = supabase.auth.onAuthStateChange((_event, session) => {
-        setSession(session);
-      });
-  
-      return () => subscription.unsubscribe();
-    }, []);
-  console.log(session)
+  const { user, profile, loading } = useUserProfile();
+  const { logout, isLoading: isLoggingOut } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
-  const user = session?.user;
 
   const navLinks = [
     { href: "/", label: "Home", icon: Home },
@@ -73,25 +55,9 @@ export function Navbar() {
   const adminLinks = [];
   const userLinks = [{ href: "/profile", label: "Profile", icon: UserCircle }];
 
-  if (user?.role === "ADMIN") {
+  if (profile?.role === "ADMIN") {
     adminLinks.push({ href: "/admin", label: "Admin Panel", icon: Shield });
   }
-
-  const handleLogout = async () => {
-    try {
-      const res = await fetch("/api/auth/logout", {
-        method: "POST",
-      });
-
-      if (res.ok) {
-        window.location.reload();
-      } else {
-        console.error("Logout failed");
-      }
-    } catch (err) {
-      console.error("Error logging out:", err);
-    }
-  };
 
   const getUserInitials = (name?: string, email?: string) => {
     if (name) {
@@ -107,6 +73,53 @@ export function Navbar() {
     }
     return "U";
   };
+
+  const handleLogout = async () => {
+    await logout();
+    setIsOpen(false); // Close mobile menu after logout
+  };
+
+  // Show loading skeleton while user data is being fetched
+  if (loading) {
+    return (
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <Link
+              href="/"
+              className="flex items-center space-x-3 hover:opacity-80 transition-opacity"
+            >
+              <Image
+                src={Logo || "/placeholder.svg"}
+                alt="UniVault Logo"
+                className="h-10 w-10"
+              />
+              <div className="flex flex-col">
+                <span className="text-xl font-bold tracking-tight">
+                  UniVault
+                </span>
+                <span className="text-xs text-muted-foreground hidden sm:block">
+                  Resource Hub
+                </span>
+              </div>
+            </Link>
+
+            <div className="hidden md:flex items-center space-x-3">
+              <div className="w-8 h-8 bg-muted rounded-full animate-pulse" />
+              <Theme />
+            </div>
+
+            <div className="flex items-center space-x-2 md:hidden">
+              <Theme />
+              <Button variant="ghost" size="icon" disabled>
+                <Menu className="h-5 w-5" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      </nav>
+    );
+  }
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
@@ -170,20 +183,33 @@ export function Navbar() {
                     <Button
                       variant="ghost"
                       className="flex items-center space-x-2 h-10 px-3"
+                      disabled={isLoggingOut}
                     >
                       <Avatar className="h-8 w-8 border-2">
                         <AvatarImage
-                          src={user.user_metadata.avatar_url}
-                          alt={user.email}
+                          src={profile?.profilePicture || "/placeholder.svg"}
+                          alt={profile?.email + " profile picture"}
                         />
                         <AvatarFallback className="text-xs">
-                          {getUserInitials(user.email)}
+                          {getUserInitials(profile?.username, profile?.email)}
                         </AvatarFallback>
                       </Avatar>
                       <div className="hidden lg:flex flex-col items-start">
                         <span className="text-sm font-medium">
-                          {user.user_metadata.full_name}
+                          {profile?.username || "User"}
                         </span>
+                        <div className="flex items-center space-x-1">
+                          <Badge
+                            variant={
+                              profile?.role === "ADMIN"
+                                ? "default"
+                                : "secondary"
+                            }
+                            className="text-xs px-1.5 py-0"
+                          >
+                            {profile?.role || "USER"}
+                          </Badge>
+                        </div>
                       </div>
                       <ChevronDown className="h-4 w-4 text-muted-foreground" />
                     </Button>
@@ -192,10 +218,10 @@ export function Navbar() {
                     <DropdownMenuLabel>
                       <div className="flex flex-col space-y-1">
                         <p className="text-sm font-medium">
-                          {user.email || "User"}
+                          {profile?.username || "User"}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {user.email}
+                          {profile?.email}
                         </p>
                       </div>
                     </DropdownMenuLabel>
@@ -218,22 +244,27 @@ export function Navbar() {
 
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
-                      onClick={logout}
+                      onClick={handleLogout}
+                      disabled={isLoggingOut}
                       className="text-red-600 focus:text-red-600"
                     >
-                      <LogOut className="h-4 w-4 mr-2" />
-                      <span>Logout</span>
+                      {isLoggingOut ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <LogOut className="h-4 w-4 mr-2" />
+                      )}
+                      <span>{isLoggingOut ? "Logging out..." : "Logout"}</span>
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
             ) : (
               <div className="flex items-center space-x-2">
-                <Button variant="ghost" asChild>
-                  <Link href="/login">Login</Link>
-                </Button>
                 <Button asChild>
-                  <Link href="/signup">Sign Up</Link>
+                  <Link href="/login">
+                    <User className="h-4 w-4 mr-2" />
+                    Login
+                  </Link>
                 </Button>
               </div>
             )}
@@ -245,7 +276,7 @@ export function Navbar() {
             <Theme />
             <Sheet open={isOpen} onOpenChange={setIsOpen}>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="icon">
+                <Button variant="ghost" size="icon" disabled={isLoggingOut}>
                   <Menu className="h-5 w-5" />
                   <span className="sr-only">Toggle menu</span>
                 </Button>
@@ -268,20 +299,28 @@ export function Navbar() {
                     <div className="flex items-center space-x-3 p-4 bg-accent/50 rounded-lg">
                       <Avatar className="h-12 w-12 border-2">
                         <AvatarImage
-                          src={"/placeholder.svg"}
-                          alt={user.email}
+                          src={profile?.profilePicture || "/placeholder.svg"}
+                          alt={profile?.email}
                         />
                         <AvatarFallback>
-                          {getUserInitials(user.email)}
+                          {getUserInitials(profile?.username, profile?.email)}
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex flex-col">
                         <span className="font-medium">
-                          {user.email || "User"}
+                          {profile?.username || "User"}
                         </span>
                         <span className="text-sm text-muted-foreground">
-                          {user.email}
+                          {profile?.email}
                         </span>
+                        <Badge
+                          variant={
+                            profile?.role === "ADMIN" ? "default" : "secondary"
+                          }
+                          className="text-xs px-1.5 py-0 w-fit mt-1"
+                        >
+                          {profile?.role || "USER"}
+                        </Badge>
                       </div>
                     </div>
                   )}
@@ -344,7 +383,7 @@ export function Navbar() {
                           <Link
                             key={link.href}
                             href={link.href}
-                            className="flex items-center space-x-3 px-3 pt-3 rounded-md text-foreground hover:bg-accent transition-colors"
+                            className="flex items-center space-x-3 px-3 py-3 rounded-md text-foreground hover:bg-accent transition-colors"
                             onClick={() => setIsOpen(false)}
                           >
                             <Icon className="h-5 w-5" />
@@ -354,35 +393,33 @@ export function Navbar() {
                       })}
                     </div>
                   )}
-                  {user ? (
-                    <Button
-                      variant="destructive"
-                      onClick={handleLogout}
-                      className="w-fit ml-2 justify-start"
-                      size="lg"
-                    >
-                      <LogOut className="h-4 w-4 mr-2" />
-                      Logout
-                    </Button>
-                  ) : (
-                    <div className="flex">
+
+                  {/* Auth Actions */}
+                  <div className="pt-4">
+                    {user ? (
                       <Button
-                        variant="outline"
-                        asChild
-                        className="w-fit mx-2 bg-transparent"
+                        variant="destructive"
+                        onClick={handleLogout}
+                        disabled={isLoggingOut}
+                        className="justify-start"
+                        size="lg"
                       >
+                        {isLoggingOut ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <LogOut className="h-4 w-4 mr-2" />
+                        )}
+                        {isLoggingOut ? "Logging out..." : "Logout"}
+                      </Button>
+                    ) : (
+                      <Button asChild className="ml-3">
                         <Link href="/login" onClick={() => setIsOpen(false)}>
                           <User className="h-4 w-4 mr-2" />
                           Login
                         </Link>
                       </Button>
-                      <Button asChild className="w-fit mx-2">
-                        <Link href="/signup" onClick={() => setIsOpen(false)}>
-                          Sign Up
-                        </Link>
-                      </Button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               </SheetContent>
             </Sheet>
