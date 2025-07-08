@@ -9,7 +9,7 @@ export default function UnauthorizedPage() {
           <span>Unauthorized</span>
         </h1>
         <p className="text-muted-foreground">
-          You do not have permission to view this page.
+          You do not have permission to view this page. Login to access this page.
         </p>
       </div>
     </div>

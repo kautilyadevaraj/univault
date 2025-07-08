@@ -74,15 +74,15 @@ export async function middleware(request: NextRequest) {
   // Redirect unauthenticated users from protected routes
   if (!user && (isProtectedRoute || isAdminRoute)) {
     const redirectUrl = url.clone();
-    redirectUrl.pathname = "/login";
+    redirectUrl.pathname = "/unauthorized";
     redirectUrl.searchParams.set("redirectedFrom", url.pathname);
     return NextResponse.redirect(redirectUrl);
   }
 
   // Redirect authenticated users from auth pages
-  if (user && (url.pathname === "/login" || url.pathname === "/signup")) {
+  if (user && (url.pathname === "/login")) {
     const redirectUrl = url.clone();
-    redirectUrl.pathname = "/dashboard";
+    redirectUrl.pathname = "/search";
     return NextResponse.redirect(redirectUrl);
   }
 
@@ -103,7 +103,7 @@ export async function middleware(request: NextRequest) {
       }
 
       const redirectUrl = url.clone();
-      redirectUrl.pathname = "/dashboard";
+      redirectUrl.pathname = "/unauthorized";
       return NextResponse.redirect(redirectUrl);
     }
   }
