@@ -113,7 +113,21 @@ export default function SearchPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [sortBy, setSortBy] = useState("relevance");
-  const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
+  const [selectedFilters, setSelectedFilters] = useState<{
+    tags: string[];
+    schools: string[];
+    programs: string[];
+    resourceTypes: string[];
+    fileTypes: string[];
+    courseYears: string[];
+  }>({
+    tags: [],
+    schools: [],
+    programs: [],
+    resourceTypes: [],
+    fileTypes: [],
+    courseYears: [],
+  });
   const [previewResource, setPreviewResource] = useState<SearchResult | null>(
     null
   );
@@ -137,7 +151,7 @@ export default function SearchPage() {
       setDebouncedQuery(searchQuery);
       // Reset to page 1 when search query changes
       setCurrentPage(1);
-    }, 800); // Increased from 300ms to 800ms
+    }, 800);
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
@@ -146,7 +160,7 @@ export default function SearchPage() {
     setCurrentPage(1);
   }, [selectedFilters, sortBy, useSmartSearch]);
 
-  // Build search URL with parameters (keeping original simple format)
+  // Build search URL with parameters
   const searchUrl = useMemo(() => {
     const params = new URLSearchParams();
     if (debouncedQuery.trim()) {
@@ -155,8 +169,10 @@ export default function SearchPage() {
     if (useSmartSearch && debouncedQuery.trim()) {
       params.set("semantic", "true");
     }
+    // Always include sort parameter
+    params.set("sort", sortBy);
     return `/api/search?${params.toString()}`;
-  }, [debouncedQuery, useSmartSearch]);
+  }, [debouncedQuery, useSmartSearch, sortBy]);
 
   const {
     data: searchResults,
@@ -165,7 +181,7 @@ export default function SearchPage() {
     mutate,
   } = useSWR<SearchResult[]>(searchUrl, fetcher, {
     revalidateOnFocus: false,
-    dedupingInterval: 1000, // Prevent duplicate requests within 1 second
+    dedupingInterval: 1000,
   });
 
   // Set searching state based on SWR loading
@@ -173,17 +189,49 @@ export default function SearchPage() {
     setIsSearching(isLoading);
   }, [isLoading]);
 
-  const filterOptions = [
-    "Past Papers",
-    "2025",
-    "2024",
-    "Midterm",
-    "SEE",
-    "Notes",
-    "CIE-1",
-    "CIE-3",
-    "Retest Papers"
-  ];
+  // Generate filter options from search results - with null checks
+  const filterOptions = useMemo(() => {
+    const defaultFilters = {
+      tags: [],
+      schools: [],
+      programs: [],
+      resourceTypes: [],
+      fileTypes: [],
+      courseYears: [],
+    };
+
+    if (!searchResults || !Array.isArray(searchResults)) {
+      return defaultFilters;
+    }
+
+    const tags = new Set<string>();
+    const schools = new Set<string>();
+    const programs = new Set<string>();
+    const resourceTypes = new Set<string>();
+    const fileTypes = new Set<string>();
+    const courseYears = new Set<string>();
+
+    searchResults.forEach((result) => {
+      // Add null checks for each property
+      if (result.tags && Array.isArray(result.tags)) {
+        result.tags.forEach((tag) => tag && tags.add(tag));
+      }
+      if (result.school) schools.add(result.school);
+      if (result.program) programs.add(result.program);
+      if (result.resourceType) resourceTypes.add(result.resourceType);
+      if (result.fileType) fileTypes.add(result.fileType);
+      if (result.courseYear) courseYears.add(result.courseYear);
+    });
+
+    return {
+      tags: Array.from(tags).sort(),
+      schools: Array.from(schools).sort(),
+      programs: Array.from(programs).sort(),
+      resourceTypes: Array.from(resourceTypes).sort(),
+      fileTypes: Array.from(fileTypes).sort(),
+      courseYears: Array.from(courseYears).sort(),
+    };
+  }, [searchResults]);
 
   const courseYears = {
     "1": "1st Year",
@@ -193,39 +241,133 @@ export default function SearchPage() {
     "5": "5th Year",
   };
 
-  // Filter and sort results (frontend processing)
+  // Filter and sort results (frontend processing) - with null checks
   const filteredAndSortedResults = useMemo(() => {
-    if (!searchResults) return [];
+    if (!searchResults || !Array.isArray(searchResults)) return [];
 
-    let filtered = searchResults;
+    let filtered = [...searchResults];
 
-    // Apply selected filters
-    if (selectedFilters.length > 0) {
-      filtered = filtered.filter((result) =>
-        selectedFilters.some(
-          (filter) =>
-            result.tags.some((tag) =>
-              tag.toLowerCase().includes(filter.toLowerCase())
-            ) ||
-            result.resourceType.toLowerCase().includes(filter.toLowerCase()) ||
-            result.yearOfCreation.toString().includes(filter)
-        )
-      );
+    // Enhanced search - search in multiple fields
+    if (debouncedQuery.trim()) {
+      const query = debouncedQuery.toLowerCase();
+      filtered = filtered.filter((result) => {
+        if (!result) return false;
+
+        return (
+          (result.title && result.title.toLowerCase().includes(query)) ||
+          (result.description &&
+            result.description.toLowerCase().includes(query)) ||
+          (result.tags &&
+            Array.isArray(result.tags) &&
+            result.tags.some(
+              (tag) => tag && tag.toLowerCase().includes(query)
+            )) ||
+          (result.courseName &&
+            result.courseName.toLowerCase().includes(query)) ||
+          (result.school && result.school.toLowerCase().includes(query)) ||
+          (result.program && result.program.toLowerCase().includes(query)) ||
+          (result.uploader && result.uploader.toLowerCase().includes(query)) ||
+          (result.resourceType &&
+            result.resourceType.toLowerCase().includes(query))
+        );
+      });
     }
 
-    // Apply sorting
+    // Apply filters - with null checks
+    const hasActiveFilters =
+      selectedFilters &&
+      Object.values(selectedFilters).some((arr) => arr && arr.length > 0);
+
+    if (hasActiveFilters) {
+      filtered = filtered.filter((result) => {
+        if (!result) return false;
+
+        const matchesTags =
+          !selectedFilters.tags ||
+          selectedFilters.tags.length === 0 ||
+          (result.tags &&
+            Array.isArray(result.tags) &&
+            selectedFilters.tags.some((tag) => result.tags.includes(tag)));
+
+        const matchesSchools =
+          !selectedFilters.schools ||
+          selectedFilters.schools.length === 0 ||
+          (result.school && selectedFilters.schools.includes(result.school));
+
+        const matchesPrograms =
+          !selectedFilters.programs ||
+          selectedFilters.programs.length === 0 ||
+          (result.program && selectedFilters.programs.includes(result.program));
+
+        const matchesResourceTypes =
+          !selectedFilters.resourceTypes ||
+          selectedFilters.resourceTypes.length === 0 ||
+          (result.resourceType &&
+            selectedFilters.resourceTypes.includes(result.resourceType));
+
+        const matchesFileTypes =
+          !selectedFilters.fileTypes ||
+          selectedFilters.fileTypes.length === 0 ||
+          (result.fileType &&
+            selectedFilters.fileTypes.includes(result.fileType));
+
+        const matchesCourseYears =
+          !selectedFilters.courseYears ||
+          selectedFilters.courseYears.length === 0 ||
+          (result.courseYear &&
+            selectedFilters.courseYears.includes(result.courseYear));
+
+        return (
+          matchesTags &&
+          matchesSchools &&
+          matchesPrograms &&
+          matchesResourceTypes &&
+          matchesFileTypes &&
+          matchesCourseYears
+        );
+      });
+    }
+
+    // Enhanced sorting
     switch (sortBy) {
       case "date":
-        filtered.sort(
-          (a, b) =>
+        filtered.sort((a, b) => {
+          if (!a.uploadDate || !b.uploadDate) return 0;
+          return (
             new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()
-        );
-        break;
-      case "downloads":
-        filtered.sort((a, b) => b.downloads - a.downloads);
+          );
+        });
         break;
       case "title":
-        filtered.sort((a, b) => a.title.localeCompare(b.title));
+        filtered.sort((a, b) => {
+          if (!a.title || !b.title) return 0;
+          return a.title.localeCompare(b.title);
+        });
+        break;
+      case "year":
+        filtered.sort((a, b) => {
+          const yearA = a.yearOfCreation || 0;
+          const yearB = b.yearOfCreation || 0;
+          return yearB - yearA;
+        });
+        break;
+      case "school":
+        filtered.sort((a, b) => {
+          if (!a.school || !b.school) return 0;
+          return a.school.localeCompare(b.school);
+        });
+        break;
+      case "course":
+        filtered.sort((a, b) => {
+          if (!a.courseName || !b.courseName) return 0;
+          return a.courseName.localeCompare(b.courseName);
+        });
+        break;
+      case "uploader":
+        filtered.sort((a, b) => {
+          if (!a.uploader || !b.uploader) return 0;
+          return a.uploader.localeCompare(b.uploader);
+        });
         break;
       case "similarity":
         if (useSmartSearch) {
@@ -238,7 +380,7 @@ export default function SearchPage() {
     }
 
     return filtered;
-  }, [searchResults, selectedFilters, sortBy, useSmartSearch]);
+  }, [searchResults, selectedFilters, sortBy, useSmartSearch, debouncedQuery]);
 
   // Frontend pagination calculations
   const paginationData = useMemo(() => {
@@ -261,16 +403,31 @@ export default function SearchPage() {
     };
   }, [filteredAndSortedResults, currentPage, resultsPerPage]);
 
-  const toggleFilter = (filter: string) => {
-    setSelectedFilters((prev) =>
-      prev.includes(filter)
-        ? prev.filter((f) => f !== filter)
-        : [...prev, filter]
-    );
+  const toggleFilter = (
+    category: keyof typeof selectedFilters,
+    value: string
+  ) => {
+    setSelectedFilters((prev) => {
+      if (!prev || !prev[category]) return prev;
+
+      return {
+        ...prev,
+        [category]: prev[category].includes(value)
+          ? prev[category].filter((f) => f !== value)
+          : [...prev[category], value],
+      };
+    });
   };
 
   const clearAllFilters = () => {
-    setSelectedFilters([]);
+    setSelectedFilters({
+      tags: [],
+      schools: [],
+      programs: [],
+      resourceTypes: [],
+      fileTypes: [],
+      courseYears: [],
+    });
     setSearchQuery("");
     setDebouncedQuery("");
     setCurrentPage(1);
@@ -278,13 +435,12 @@ export default function SearchPage() {
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
-    // Scroll to top when page changes
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleResultsPerPageChange = (value: string) => {
     setResultsPerPage(Number(value));
-    setCurrentPage(1); // Reset to first page when changing results per page
+    setCurrentPage(1);
   };
 
   async function handlePreview(resource: SearchResult) {
@@ -335,6 +491,8 @@ export default function SearchPage() {
   }
 
   const getFileIcon = (fileType: string) => {
+    if (!fileType) return <File className="h-3 w-3" />;
+
     switch (fileType.toLowerCase()) {
       case "pdf":
         return <FileText className="h-3 w-3" />;
@@ -357,28 +515,23 @@ export default function SearchPage() {
     const maxVisiblePages = 5;
 
     if (totalPages <= maxVisiblePages) {
-      // Show all pages if total pages is small
       for (let i = 1; i <= totalPages; i++) {
         items.push(i);
       }
     } else {
-      // Show smart pagination
       if (currentPage <= 3) {
-        // Show first few pages
         for (let i = 1; i <= 4; i++) {
           items.push(i);
         }
         items.push("ellipsis");
         items.push(totalPages);
       } else if (currentPage >= totalPages - 2) {
-        // Show last few pages
         items.push(1);
         items.push("ellipsis");
         for (let i = totalPages - 3; i <= totalPages; i++) {
           items.push(i);
         }
       } else {
-        // Show middle pages
         items.push(1);
         items.push("ellipsis");
         for (let i = currentPage - 1; i <= currentPage + 1; i++) {
@@ -418,7 +571,7 @@ export default function SearchPage() {
   return (
     <div className="min-h-screen py-8 px-4">
       <div className="max-w-6xl mx-auto">
-        {/* Search Header - Always visible */}
+        {/* Search Header */}
         <div className="mb-8">
           <div className="flex flex-col sm:flex-row gap-2 mb-6">
             <div className="relative flex-1">
@@ -456,11 +609,17 @@ export default function SearchPage() {
               >
                 <Filter className="h-4 w-4 mr-2" />
                 Filters
-                {selectedFilters.length > 0 && (
-                  <Badge variant="secondary" className="ml-2">
-                    {selectedFilters.length}
-                  </Badge>
-                )}
+                {selectedFilters &&
+                  Object.values(selectedFilters).some(
+                    (arr) => arr && arr.length > 0
+                  ) && (
+                    <Badge variant="secondary" className="ml-2">
+                      {Object.values(selectedFilters).reduce(
+                        (acc, arr) => acc + (arr ? arr.length : 0),
+                        0
+                      )}
+                    </Badge>
+                  )}
               </Button>
               <Button
                 onClick={handleRefresh}
@@ -499,39 +658,196 @@ export default function SearchPage() {
           </div>
 
           {/* Filters */}
-          {(showFilters || selectedFilters.length > 0) && (
+          {(showFilters ||
+            (selectedFilters &&
+              Object.values(selectedFilters).some(
+                (arr) => arr && arr.length > 0
+              ))) && (
             <div className="mb-4 p-4 border rounded-lg bg-muted/30">
               <div className="flex justify-between items-center mb-3">
                 <h3 className="font-medium">Filters</h3>
-                {selectedFilters.length > 0 && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={clearAllFilters}
-                    disabled={isSearching}
-                  >
-                    Clear all
-                  </Button>
-                )}
+                {selectedFilters &&
+                  Object.values(selectedFilters).some(
+                    (arr) => arr && arr.length > 0
+                  ) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={clearAllFilters}
+                      disabled={isSearching}
+                    >
+                      Clear all
+                    </Button>
+                  )}
               </div>
-              <div className="flex flex-wrap gap-2">
-                {filterOptions.map((filter) => (
-                  <Badge
-                    key={filter}
-                    variant={
-                      selectedFilters.includes(filter) ? "default" : "outline"
-                    }
-                    className={`cursor-pointer hover:bg-primary/10 transition-colors ${
-                      isSearching ? "opacity-50 cursor-not-allowed" : ""
-                    }`}
-                    onClick={() => !isSearching && toggleFilter(filter)}
-                  >
-                    {filter}
-                    {selectedFilters.includes(filter) && (
-                      <X className="h-3 w-3 ml-1" />
-                    )}
-                  </Badge>
-                ))}
+
+              <div className="space-y-4">
+                {/* Tags */}
+                {filterOptions.tags && filterOptions.tags.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium mb-2">Tags</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {filterOptions.tags.map((tag) => (
+                        <Badge
+                          key={tag}
+                          variant={
+                            selectedFilters.tags &&
+                            selectedFilters.tags.includes(tag)
+                              ? "default"
+                              : "outline"
+                          }
+                          className={`cursor-pointer hover:bg-primary/10 transition-colors ${
+                            isSearching ? "opacity-50 cursor-not-allowed" : ""
+                          }`}
+                          onClick={() =>
+                            !isSearching && toggleFilter("tags", tag)
+                          }
+                        >
+                          {tag}
+                          {selectedFilters.tags &&
+                            selectedFilters.tags.includes(tag) && (
+                              <X className="h-3 w-3 ml-1" />
+                            )}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Schools */}
+                {filterOptions.schools && filterOptions.schools.length > 1 && (
+                  <div>
+                    <h4 className="text-sm font-medium mb-2">Schools</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {filterOptions.schools.slice(0, 5).map((school) => (
+                        <Badge
+                          key={school}
+                          variant={
+                            selectedFilters.schools &&
+                            selectedFilters.schools.includes(school)
+                              ? "default"
+                              : "outline"
+                          }
+                          className={`cursor-pointer hover:bg-primary/10 transition-colors ${
+                            isSearching ? "opacity-50 cursor-not-allowed" : ""
+                          }`}
+                          onClick={() =>
+                            !isSearching && toggleFilter("schools", school)
+                          }
+                        >
+                          {school}
+                          {selectedFilters.schools &&
+                            selectedFilters.schools.includes(school) && (
+                              <X className="h-3 w-3 ml-1" />
+                            )}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Resource Types */}
+                {filterOptions.resourceTypes &&
+                  filterOptions.resourceTypes.length > 1 && (
+                    <div>
+                      <h4 className="text-sm font-medium mb-2">
+                        Resource Types
+                      </h4>
+                      <div className="flex flex-wrap gap-2">
+                        {filterOptions.resourceTypes.map((type) => (
+                          <Badge
+                            key={type}
+                            variant={
+                              selectedFilters.resourceTypes &&
+                              selectedFilters.resourceTypes.includes(type)
+                                ? "default"
+                                : "outline"
+                            }
+                            className={`cursor-pointer hover:bg-primary/10 transition-colors ${
+                              isSearching ? "opacity-50 cursor-not-allowed" : ""
+                            }`}
+                            onClick={() =>
+                              !isSearching &&
+                              toggleFilter("resourceTypes", type)
+                            }
+                          >
+                            {type}
+                            {selectedFilters.resourceTypes &&
+                              selectedFilters.resourceTypes.includes(type) && (
+                                <X className="h-3 w-3 ml-1" />
+                              )}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                {/* Course Years */}
+                {filterOptions.courseYears &&
+                  filterOptions.courseYears.length > 1 && (
+                    <div>
+                      <h4 className="text-sm font-medium mb-2">Course Years</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {filterOptions.courseYears.map((year) => (
+                          <Badge
+                            key={year}
+                            variant={
+                              selectedFilters.courseYears &&
+                              selectedFilters.courseYears.includes(year)
+                                ? "default"
+                                : "outline"
+                            }
+                            className={`cursor-pointer hover:bg-primary/10 transition-colors ${
+                              isSearching ? "opacity-50 cursor-not-allowed" : ""
+                            }`}
+                            onClick={() =>
+                              !isSearching && toggleFilter("courseYears", year)
+                            }
+                          >
+                            {courseYears[year as keyof typeof courseYears] ||
+                              `Year ${year}`}
+                            {selectedFilters.courseYears &&
+                              selectedFilters.courseYears.includes(year) && (
+                                <X className="h-3 w-3 ml-1" />
+                              )}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                {/* File Types */}
+                {filterOptions.fileTypes &&
+                  filterOptions.fileTypes.length > 1 && (
+                    <div>
+                      <h4 className="text-sm font-medium mb-2">File Types</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {filterOptions.fileTypes.map((type) => (
+                          <Badge
+                            key={type}
+                            variant={
+                              selectedFilters.fileTypes &&
+                              selectedFilters.fileTypes.includes(type)
+                                ? "default"
+                                : "outline"
+                            }
+                            className={`cursor-pointer hover:bg-primary/10 transition-colors ${
+                              isSearching ? "opacity-50 cursor-not-allowed" : ""
+                            }`}
+                            onClick={() =>
+                              !isSearching && toggleFilter("fileTypes", type)
+                            }
+                          >
+                            {type.toUpperCase()}
+                            {selectedFilters.fileTypes &&
+                              selectedFilters.fileTypes.includes(type) && (
+                                <X className="h-3 w-3 ml-1" />
+                              )}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
               </div>
             </div>
           )}
@@ -560,7 +876,11 @@ export default function SearchPage() {
                   "No results found"
                 )}
               </p>
-              {(debouncedQuery || selectedFilters.length > 0) &&
+              {(debouncedQuery ||
+                (selectedFilters &&
+                  Object.values(selectedFilters).some(
+                    (arr) => arr && arr.length > 0
+                  ))) &&
                 !isSearching && (
                   <Button variant="ghost" size="sm" onClick={clearAllFilters}>
                     <X className="h-4 w-4 mr-1" />
@@ -599,23 +919,24 @@ export default function SearchPage() {
                     <SelectItem value="similarity">AI Similarity</SelectItem>
                   )}
                   <SelectItem value="date">Upload Date</SelectItem>
-                  <SelectItem value="downloads">Most Downloaded</SelectItem>
+                  <SelectItem value="year">Year of Creation</SelectItem>
                   <SelectItem value="title">Title A-Z</SelectItem>
+                  <SelectItem value="school">School</SelectItem>
+                  <SelectItem value="course">Course Name</SelectItem>
+                  <SelectItem value="uploader">Uploader</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
         </div>
 
-        {/* Results - Only this section shows loading */}
+        {/* Results */}
         <div className="space-y-4 mb-8">
           {isSearching ? (
-            // Loading skeletons - only for results
             Array.from({ length: resultsPerPage }).map((_, i) => (
               <SearchResultSkeleton key={i} />
             ))
           ) : paginationData.currentResults.length === 0 ? (
-            // Empty state
             <Card className="text-center py-12">
               <CardHeader>
                 <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
@@ -623,13 +944,21 @@ export default function SearchPage() {
                 </div>
                 <CardTitle className="mb-2">No resources found</CardTitle>
                 <CardDescription className="mb-4">
-                  {debouncedQuery || selectedFilters.length > 0
+                  {debouncedQuery ||
+                  (selectedFilters &&
+                    Object.values(selectedFilters).some(
+                      (arr) => arr && arr.length > 0
+                    ))
                     ? useSmartSearch
                       ? "Try adjusting your search terms, disabling AI search, or clearing filters"
                       : "Try adjusting your search terms, enabling AI search, or clearing filters"
                     : "No resources are available at the moment"}
                 </CardDescription>
-                {(debouncedQuery || selectedFilters.length > 0) && (
+                {(debouncedQuery ||
+                  (selectedFilters &&
+                    Object.values(selectedFilters).some(
+                      (arr) => arr && arr.length > 0
+                    ))) && (
                   <div className="flex flex-col sm:flex-row gap-2 justify-center">
                     <Button variant="outline" onClick={clearAllFilters}>
                       Clear search and filters
@@ -645,7 +974,6 @@ export default function SearchPage() {
               </CardHeader>
             </Card>
           ) : (
-            // Results - Show only current page results
             paginationData.currentResults.map((result) => (
               <Card
                 key={result.id}
@@ -671,20 +999,23 @@ export default function SearchPage() {
                         {result.description}
                       </CardDescription>
                       <div className="flex flex-wrap gap-2 mb-3">
-                        {result.tags.map((tag) => (
-                          <Badge
-                            key={tag}
-                            variant="secondary"
-                            className={`text-xs cursor-pointer transition-colors ${
-                              selectedFilters.includes(tag)
-                                ? "bg-primary/20"
-                                : ""
-                            }`}
-                            onClick={() => toggleFilter(tag)}
-                          >
-                            {tag}
-                          </Badge>
-                        ))}
+                        {result.tags &&
+                          Array.isArray(result.tags) &&
+                          result.tags.map((tag) => (
+                            <Badge
+                              key={tag}
+                              variant="secondary"
+                              className={`text-xs cursor-pointer transition-colors ${
+                                selectedFilters.tags &&
+                                selectedFilters.tags.includes(tag)
+                                  ? "bg-primary/20"
+                                  : ""
+                              }`}
+                              onClick={() => toggleFilter("tags", tag)}
+                            >
+                              {tag}
+                            </Badge>
+                          ))}
                       </div>
                       <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground mb-3">
                         <div className="flex items-center justify-center gap-1">
@@ -696,21 +1027,20 @@ export default function SearchPage() {
                         </div>
                         <div className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
-                          {new Date(result.uploadDate).toLocaleDateString()}
+                          {result.uploadDate &&
+                            new Date(result.uploadDate).toLocaleDateString()}
                         </div>
                         <div className="flex items-center gap-1">
                           {getFileIcon(result.fileType)}
-                          {result.fileType.toUpperCase()}
+                          {result.fileType && result.fileType.toUpperCase()}
                         </div>
                       </div>
                       <div className="text-sm text-muted-foreground">
                         <span className="font-medium">{result.school}</span> •{" "}
                         {result.courseName} •{" "}
-                        {
-                          courseYears[
-                            result.courseYear as keyof typeof courseYears
-                          ]
-                        }
+                        {courseYears[
+                          result.courseYear as keyof typeof courseYears
+                        ] || `Year ${result.courseYear}`}
                       </div>
                     </div>
                     <div className="flex flex-row lg:flex-col gap-2 w-full lg:w-auto">
@@ -753,7 +1083,7 @@ export default function SearchPage() {
 
         {/* Preview Dialog */}
         <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
-          <DialogContent className="max-w-[95vw] sm:max-w-4xl  p-0 flex flex-col">
+          <DialogContent className="max-w-[95vw] sm:max-w-4xl p-0 flex flex-col">
             <div className="flex-shrink-0 p-6 pb-0">
               <DialogHeader>
                 <DialogTitle className="text-lg sm:text-xl mb-2 pr-8 text-start">
@@ -766,7 +1096,6 @@ export default function SearchPage() {
               <>
                 <ScrollArea className="flex px-6 min-h-0">
                   <div className="space-y-4 pb-4">
-                    {/* File Preview */}
                     <div className="space-y-4">
                       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
                         <h3 className="text-lg font-semibold">File Preview</h3>
@@ -779,7 +1108,6 @@ export default function SearchPage() {
                         </div>
                       </div>
 
-                      {/* Preview Content */}
                       {(() => {
                         const url = previewUrls[previewResource.id];
                         if (!url) {
@@ -793,7 +1121,10 @@ export default function SearchPage() {
                           );
                         }
 
-                        if (previewResource.fileType.toLowerCase() === "pdf") {
+                        if (
+                          previewResource.fileType &&
+                          previewResource.fileType.toLowerCase() === "pdf"
+                        ) {
                           return (
                             <iframe
                               src={url}
@@ -802,6 +1133,7 @@ export default function SearchPage() {
                             />
                           );
                         } else if (
+                          previewResource.fileType &&
                           ["png", "jpg", "jpeg", "gif", "webp"].includes(
                             previewResource.fileType.toLowerCase()
                           )
@@ -833,7 +1165,6 @@ export default function SearchPage() {
                   </div>
                 </ScrollArea>
 
-                {/* Action Buttons - Fixed at bottom */}
                 <div className="flex-shrink-0 flex flex-col sm:flex-row justify-end gap-2 p-6 pt-4 border-t rounded-b-lg bg-background">
                   <Button
                     variant="outline"

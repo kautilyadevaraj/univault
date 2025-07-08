@@ -1,8 +1,7 @@
-// app/api/search/route.ts
 import { NextResponse } from "next/server";
 import { db } from "@/lib/prisma";
 import { generateEmbedding } from "@/lib/gemini";
-import type { Resource } from "@/lib/generated/prisma";
+import type { Resource } from "@prisma/client";
 
 type ResourceWithUser = Resource & {
   user: {
@@ -33,6 +32,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const query = searchParams.get("q");
   const useSemanticSearch = searchParams.get("semantic") === "true";
+  const sortBy = searchParams.get("sort") || "relevance";
 
   try {
     let resources;
@@ -97,54 +97,55 @@ export async function GET(request: Request) {
       }));
 
       console.log(`Found ${resources.length} semantic results`);
-    } else if (query) {
-      // Traditional keyword search
-      const dbResources = await db.resource.findMany({
-        where: {
-          status: "APPROVED",
-          OR: [
-            { title: { contains: query, mode: "insensitive" } },
-            { description: { contains: query, mode: "insensitive" } },
-            { courseName: { contains: query, mode: "insensitive" } },
-            { tags: { hasSome: [query] } },
-          ],
-        },
-        include: {
-          user: {
-            select: {
-              username: true,
-            },
-          },
-        },
-        orderBy: {
-          createdAt: "desc",
-        },
-      });
-
-      resources = dbResources.map((r: ResourceWithUser) => ({
-        id: r.id,
-        title: r.title,
-        description: r.description ?? "",
-        tags: r.tags,
-        uploader: r.user?.username ?? "Anonymous",
-        uploadDate: r.createdAt.toISOString(),
-        fileType: r.fileUrl.split(".").pop()?.toLowerCase() ?? "unknown",
-        downloads: 0,
-        school: r.school ?? "",
-        program: r.program ?? "",
-        courseName: r.courseName ?? "",
-        resourceType: r.resourceType ?? "",
-        yearOfCreation: r.yearOfCreation ?? 0,
-        courseYear: r.courseYear?.toString() ?? "",
-        fileUrl: r.fileUrl,
-        status: r.status,
-      }));
     } else {
-      // Return all approved resources when no query
+      // Determine database sort order based on sortBy parameter
+      let orderBy: any = { createdAt: "desc" }; // default
+
+      switch (sortBy) {
+        case "date":
+          orderBy = { createdAt: "desc" };
+          break;
+        case "title":
+          orderBy = { title: "asc" };
+          break;
+        case "year":
+          orderBy = { yearOfCreation: "desc" };
+          break;
+        case "school":
+          orderBy = { school: "asc" };
+          break;
+        case "course":
+          orderBy = { courseName: "asc" };
+          break;
+        default:
+          orderBy = { createdAt: "desc" };
+          break;
+      }
+
+      // Build where clause for traditional search or fetch all
+      const whereClause = query
+        ? {
+            status: "APPROVED",
+            OR: [
+              { title: { contains: query, mode: "insensitive" as const } },
+              {
+                description: { contains: query, mode: "insensitive" as const },
+              },
+              { courseName: { contains: query, mode: "insensitive" as const } },
+              { tags: { hasSome: [query] } },
+              { school: { contains: query, mode: "insensitive" as const } },
+              { program: { contains: query, mode: "insensitive" as const } },
+              {
+                resourceType: { contains: query, mode: "insensitive" as const },
+              },
+            ],
+          }
+        : {
+            status: "APPROVED",
+          };
+
       const dbResources = await db.resource.findMany({
-        where: {
-          status: "APPROVED",
-        },
+        where: whereClause,
         include: {
           user: {
             select: {
@@ -152,9 +153,7 @@ export async function GET(request: Request) {
             },
           },
         },
-        orderBy: {
-          createdAt: "desc",
-        },
+        orderBy,
       });
 
       resources = dbResources.map((r: ResourceWithUser) => ({
@@ -169,7 +168,7 @@ export async function GET(request: Request) {
         school: r.school ?? "",
         program: r.program ?? "",
         courseName: r.courseName ?? "",
-        resourceType: r.resourceType ?? "",
+        resourceType: r.resourceType,
         yearOfCreation: r.yearOfCreation ?? 0,
         courseYear: r.courseYear?.toString() ?? "",
         fileUrl: r.fileUrl,
