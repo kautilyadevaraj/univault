@@ -138,7 +138,7 @@ export default function HomePage() {
       {/* Sticky Footer - sits behind the main content */}
       <footer className="sticky z-0 bottom-0 left-0 w-full h-60 sm:h-72 md:h-80 bg-background border-t flex justify-center items-center">
         <div className="relative overflow-hidden w-full h-full flex justify-end px-6 sm:px-8 md:px-12 text-right items-start py-6 sm:py-8 md:py-12 text-primary">
-          <div className="flex flex-col sm:flex-row space-y-6 sm:space-y-0 sm:space-x-8 md:space-x-12 lg:space-x-16 text-sm sm:text-sm md:text-base lg:text-lg">
+          <div className="flex flex-col sm:flex-row space-y-6 sm:space-y-0 sm:space-x-8 md:space-x-12 lg:space-x-16 text-base sm:text-base md:text-base lg:text-lg">
             <ul className="space-y-1 sm:space-y-2">
               <li className="hover:underline cursor-pointer">
                 <Link href="/upload">Upload</Link>
