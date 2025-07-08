@@ -4,6 +4,7 @@ import "./globals.css";
 import { Navbar } from "@/components/navbar";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
+import { Analytics } from "@vercel/analytics/next";
 
 const figtree = Figtree({
   subsets: ["latin"],
@@ -35,6 +36,7 @@ export default function RootLayout({
         <main className="pt-16">{children}</main>
         <Toaster richColors closeButton />
         </ThemeProvider>
+        <Analytics/>
       </body>
     </html>
   );
