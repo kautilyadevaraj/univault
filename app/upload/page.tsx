@@ -693,7 +693,7 @@ export default function UploadPage() {
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Supported formats: PDF, DOC, DOCX, PPT, PPTX, TXT (Max
-                      50MB)
+                      5MB)
                     </p>
                   </div>
 
