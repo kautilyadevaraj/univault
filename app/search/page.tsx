@@ -611,7 +611,7 @@ export default function SearchPage() {
                 disabled={isSearching}
               >
                 <Filter className="h-4 w-4 mr-2" />
-                <span className="hidden sm:inline">Filters</span>
+                <span className="">Filters</span>
                 {selectedFilters &&
                   Object.values(selectedFilters).some(
                     (arr) => arr && arr.length > 0
