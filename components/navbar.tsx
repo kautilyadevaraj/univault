@@ -185,7 +185,7 @@ export function Navbar() {
                       className="flex items-center space-x-2 h-10 px-3"
                       disabled={isLoggingOut}
                     >
-                      <Avatar className="h-8 w-8 border-2">
+                      <Avatar className="h-10 w-10 border-2">
                         <AvatarImage
                           src={profile?.profilePicture || "/placeholder.svg"}
                           alt={profile?.email + " profile picture"}

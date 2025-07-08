@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { prisma } from "@/lib/prisma";
-import { cookies } from "next/headers";
-import { jwtVerify } from "jose";
 import { randomUUID } from "crypto";
 import { generateEmbedding, createResourceText } from "@/lib/gemini";
 import { createClient } from "@/utils/supabase/server";
@@ -28,8 +26,6 @@ const s3 = new S3Client({
   },
 });
 
-const JWT_SECRET = process.env.JWT_SECRET!;
-
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
@@ -52,6 +48,8 @@ export async function POST(req: NextRequest) {
       ? JSON.parse(formData.get("tags")!.toString())
       : [];
     const linkedRequestId = formData.get("linkedRequestId")?.toString() ?? null;
+    const uploadAnonymously =
+      formData.get("uploadAnonymously")?.toString() ?? "";
 
     // get the file
     const file = formData.get("file") as File;
@@ -63,33 +61,35 @@ export async function POST(req: NextRequest) {
     let uploaderId: string | null = null;
     const supabase = await createClient();
 
-    try {
-      const {
-        data: { user },
-        error,
-      } = await supabase.auth.getUser();
+    if (uploadAnonymously === "false") {
+      try {
+        const {
+          data: { user },
+          error,
+        } = await supabase.auth.getUser();
 
-      if (error) {
-        console.error("Auth error:", error);
-      }
-
-      if (user) {
-        // Get user profile from your custom User table
-        const { data: userProfile, error: profileError } = await supabase
-          .from("User")
-          .select("id")
-          .eq("authId", user.id)
-          .single();
-
-        if (profileError) {
-          console.error("Profile fetch error:", profileError);
-        } else if (userProfile) {
-          uploaderId = userProfile.id;
+        if (error) {
+          console.error("Auth error:", error);
         }
+
+        if (user) {
+          // Get user profile from your custom User table
+          const { data: userProfile, error: profileError } = await supabase
+            .from("User")
+            .select("id")
+            .eq("authId", user.id)
+            .single();
+
+          if (profileError) {
+            console.error("Profile fetch error:", profileError);
+          } else if (userProfile) {
+            uploaderId = userProfile.id;
+          }
+        }
+      } catch (authError) {
+        console.error("Authentication check failed:", authError);
+        // Continue as anonymous upload
       }
-    } catch (authError) {
-      console.error("Authentication check failed:", authError);
-      // Continue as anonymous upload
     }
 
     // generate a random filename with same extension

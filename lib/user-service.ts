@@ -58,8 +58,6 @@ export async function createOrUpdateUserProfile(
     } else {
       // Create new user with default MEMBER role
       const username =
-        authUser.user_metadata?.full_name ||
-        authUser.email?.split("@")[0] ||
         `user_${Date.now()}`;
 
       const { data, error } = await supabase

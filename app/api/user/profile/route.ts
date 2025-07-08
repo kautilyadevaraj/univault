@@ -1,33 +1,22 @@
-// src/app/api/users/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/prisma";
-import { cookies } from "next/headers";
-import { verifyToken } from "@/lib/auth";
+import { createClient } from "@/utils/supabase/server";
 
-export async function GET(
-  _req: NextRequest,
-) {
+export async function GET(_req: NextRequest) {
   try {
-    const token = (await cookies()).get("univault_token")?.value;
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
 
-    if (!token) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+    if (error || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const result = verifyToken(token);
-
-    if (!result || !result.email) {
-      return NextResponse.json(
-        { error: "Invalid Token" },
-        { status: 403 }
-      );
-    }
-    // 1. fetch user with all resources
-    const user = await db.user.findUnique({
-      where: { id: result.userId },
+    // Fetch user profile from your custom User table using authId
+    const userProfile = await db.user.findUnique({
+      where: { authId: user.id },
       include: {
         resources: {
           orderBy: { createdAt: "desc" },
@@ -45,48 +34,48 @@ export async function GET(
       },
     });
 
-    if (!user) {
+    if (!userProfile) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // 2. derive helper data the frontend expects
-    const approvedResources = user.resources.filter(
+    // Derive helper data the frontend expects
+    const approvedResources = userProfile.resources.filter(
       (r) => r.status === "APPROVED"
     );
-    const pendingResources = user.resources.filter(
+    const pendingResources = userProfile.resources.filter(
       (r) => r.status === "PENDING"
     );
 
     const payload = {
-      // core profile fields
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      role: user.role,
-      createdAt: user.createdAt,
-      school: user.school,
-      program: user.program,
-      yearOfStudy: user.yearOfStudy,
-      graduatingYear: user.graduatingYear,
-      bio: user.bio,
-      profilePicture: user.profilePicture,
-      socialLinks: user.socialLinks,
+      // Core profile fields
+      id: userProfile.id,
+      username: userProfile.username,
+      email: userProfile.email,
+      role: userProfile.role,
+      createdAt: userProfile.createdAt,
+      school: userProfile.school,
+      program: userProfile.program,
+      yearOfStudy: userProfile.yearOfStudy,
+      graduatingYear: userProfile.graduatingYear,
+      bio: userProfile.bio,
+      profilePicture: userProfile.profilePicture,
+      socialLinks: userProfile.socialLinks,
 
-      // privacy toggles
-      profileVisibility: user.profileVisibility,
-      showEmail: user.showEmail,
-      showSchoolInfo: user.showSchoolInfo,
-      showGraduationYear: user.showGraduationYear,
-      showResourceCount: user.showResourceCount,
-      showContributionScore: user.showContributionScore,
+      // Privacy toggles
+      profileVisibility: userProfile.profileVisibility,
+      showEmail: userProfile.showEmail,
+      showSchoolInfo: userProfile.showSchoolInfo,
+      showGraduationYear: userProfile.showGraduationYear,
+      showResourceCount: userProfile.showResourceCount,
+      showContributionScore: userProfile.showContributionScore,
 
-      // resources
-      resources: user.resources,
+      // Resources
+      resources: userProfile.resources,
       approvedResourcesCount: approvedResources.length,
       pendingResourcesCount: pendingResources.length,
     };
 
-    return NextResponse.json(payload); // 200
+    return NextResponse.json(payload);
   } catch (err) {
     console.error("[USER_PROFILE_GET]", err);
     return NextResponse.json(
@@ -94,26 +83,38 @@ export async function GET(
       { status: 500 }
     );
   } finally {
-    await db.$disconnect(); // always close the connection
+    await db.$disconnect();
   }
 }
 
 export async function PUT(req: Request) {
   try {
-    const token = (await cookies()).get("univault_token")?.value;
-    const result = verifyToken(token as string);
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
 
-    if (!result?.email) {
+    if (error || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const body = await req.json();
 
-    const { username, yearOfStudy, graduatingYear, school, program, bio, socialLinks } = body;
+    const {
+      username,
+      yearOfStudy,
+      graduatingYear,
+      school,
+      program,
+      bio,
+      socialLinks,
+    } = body;
 
+    // Update user profile by authId instead of email
     const updatedUser = await db.user.update({
       where: {
-        email: result.email,
+        authId: user.id,
       },
       data: {
         username,
@@ -122,16 +123,18 @@ export async function PUT(req: Request) {
         school,
         program,
         bio,
-        socialLinks
+        socialLinks,
       },
     });
 
     return NextResponse.json(updatedUser);
   } catch (error) {
-    console.error("[POST /api/user/profile]", error);
+    console.error("[PUT /api/users/[id]]", error);
     return NextResponse.json(
       { error: "Failed to update profile" },
       { status: 500 }
     );
+  } finally {
+    await db.$disconnect();
   }
 }

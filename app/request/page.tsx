@@ -45,14 +45,7 @@ import { X } from "lucide-react";
 import { toast } from "sonner";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
-
-// Mock session hook - replace with actual useSession from your auth provider
-function useSession() {
-  return {
-    data: null, // Set to user object when logged in
-    status: "unauthenticated", // "loading" | "authenticated" | "unauthenticated"
-  };
-}
+import { useUserProfile } from "@/lib/hooks/useUserProfile";
 
 interface PendingRequest {
   id: string;
@@ -135,7 +128,7 @@ const popularRequests = [
 ];
 
 export default function RequestPage() {
-  const { data: session, status } = useSession();
+  const {user} = useUserProfile();
   const [activeTab, setActiveTab] = useState("browse");
 
   // Create Request Form State
@@ -304,7 +297,7 @@ export default function RequestPage() {
       return;
     }
 
-    if (!fulfillData.uploadAnonymously && !session) {
+    if (!fulfillData.uploadAnonymously && !user) {
       toast.error("Please log in to upload with your profile");
       return;
     }
@@ -856,7 +849,7 @@ export default function RequestPage() {
                   <Label htmlFor="uploadAnonymously">Upload anonymously</Label>
                 </div>
 
-                {!fulfillData.uploadAnonymously && !session && (
+                {!fulfillData.uploadAnonymously && !user && (
                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                     <div className="flex items-center gap-2 text-yellow-800">
                       <User className="h-4 w-4" />
@@ -941,7 +934,7 @@ export default function RequestPage() {
                 disabled={
                   !fulfillData.file ||
                   isFulfilling ||
-                  (!fulfillData.uploadAnonymously && !session)
+                  (!fulfillData.uploadAnonymously && !user)
                 }
               >
                 {isFulfilling ? "Uploading..." : "Fulfill Request"}

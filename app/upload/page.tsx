@@ -103,8 +103,7 @@ const courseYears = [
 ];
 
 export default function UploadPage() {
-  const { user, profile, loading } = useUserProfile();
-  console.log(user)
+  const { user } = useUserProfile();
   const [formData, setFormData] = useState<UploadFormData>({
     title: "",
     description: "",

@@ -54,7 +54,7 @@ model User {
   graduatingYear        Int?
   program               String?
   school                String?
-  username              String?    @unique
+  username              String    @unique
   yearOfStudy           Int?
   bio                   String?
   profilePicture        String?

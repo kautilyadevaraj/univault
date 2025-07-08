@@ -47,11 +47,11 @@ interface EditUploadDialogProps {
 }
 
 const schools = [
-  { value: "SoCSE", label: "School of Computer Science & Engineering" },
-  { value: "SDI", label: "School of Design & Innovation" },
-  { value: "SoLAS", label: "School of Liberal Arts & Sciences" },
-  { value: "SoB", label: "School of Business" },
-  { value: "SoL", label: "School of Law" },
+  { value: "SoCSE", label: "SoCSE" },
+  { value: "SDI", label: "SDI" },
+  { value: "SoLAS", label: "SoLAS" },
+  { value: "SoB", label: "SoB" },
+  { value: "SoL", label: "SoL" },
   { value: "Others", label: "Others" },
 ];
 
