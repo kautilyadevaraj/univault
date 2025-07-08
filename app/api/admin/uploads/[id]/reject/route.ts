@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { db } from "@/lib/prisma";
+import { sendMail } from "@/lib/mailer";
 
 const s3 = new S3Client({
   region: process.env.B2_REGION,
@@ -39,6 +40,21 @@ export async function POST(
       data: { fulfillUploadURL: null },
       });
     }
+  }
+
+  if (existing.email) {
+    const html = `
+  <p>Hi there,</p>
+  <p>Your upload request for <strong>${existing.title}</strong> has been rejected.</p>
+  <br/>We hope you continue contributing to the community!
+  <hr/>
+  <small>You are receiving this because you opted in for notifications.</small>
+`;
+    await sendMail({
+      to: existing.email,
+      subject: "Your resource upload request has been rejected.",
+      html,
+    });
   }
 
   // Delete DB record

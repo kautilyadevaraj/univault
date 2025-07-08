@@ -10,7 +10,7 @@ import {
   User,
   Search,
   LinkIcon,
-  Check
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,6 +60,8 @@ interface UploadFormData {
   file: File | null;
   uploadAnonymously: boolean;
   linkedRequestId: string | null;
+  email: string;
+  notifyByEmail: boolean;
 }
 
 interface PendingRequest {
@@ -102,6 +104,11 @@ const courseYears = [
   "5th Year",
 ];
 
+interface NotificationFormData {
+  email: string;
+  resourceId: string;
+}
+
 export default function UploadPage() {
   const { user } = useUserProfile();
   const [formData, setFormData] = useState<UploadFormData>({
@@ -118,10 +125,12 @@ export default function UploadPage() {
     file: null,
     uploadAnonymously: false,
     linkedRequestId: null,
+    notifyByEmail: false,
+    email: "",
   });
+  console.log(formData)
   const [tagInput, setTagInput] = useState("");
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [isSuccess, setIsSuccess] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [linkType, setLinkType] = useState<"none" | "existing">("none");
@@ -130,6 +139,11 @@ export default function UploadPage() {
   const [requests, setRequests] = useState<PendingRequest[]>([]);
   const [isReqLoading, setIsReqLoading] = useState(true);
   const [reqError, setReqError] = useState<string | null>(null);
+  // Notification State
+    const [notificationData, setNotificationData] = useState<NotificationFormData>({
+        email: "",
+        resourceId: "",
+      });
 
   useEffect(() => {
     async function loadPendingRequests() {
@@ -233,7 +247,6 @@ export default function UploadPage() {
       "Request linked successfully! Form fields have been pre-filled."
     );
   };
-  
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -291,6 +304,9 @@ export default function UploadPage() {
     // optional: link to request
     if (formData.linkedRequestId) {
       payload.append("linkedRequestId", formData.linkedRequestId);
+    }
+    if (formData.email) {
+      payload.append("email", formData.email);
     }
 
     // the file itself
@@ -393,6 +409,8 @@ export default function UploadPage() {
                         file: null,
                         uploadAnonymously: false,
                         linkedRequestId: null,
+                        notifyByEmail: false,
+                        email: ""
                       });
                       setLinkType("none");
                     }}
@@ -451,28 +469,26 @@ export default function UploadPage() {
                       </Label>
                     </div>
 
-                    {!formData.uploadAnonymously &&
-                      !user && (
-                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                          <div className="flex items-center gap-2 text-yellow-800">
-                            <User className="h-4 w-4" />
-                            <span className="text-sm font-medium">
-                              Authentication Required
-                            </span>
-                          </div>
-                          <p className="text-sm text-yellow-700 mt-1">
-                            You need to be logged in to upload with your
-                            profile.{" "}
-                            <Link
-                              href="/login"
-                              className="underline hover:no-underline"
-                            >
-                              Login here
-                            </Link>{" "}
-                            or check "Upload anonymously" above.
-                          </p>
+                    {!formData.uploadAnonymously && !user && (
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                        <div className="flex items-center gap-2 text-yellow-800">
+                          <User className="h-4 w-4" />
+                          <span className="text-sm font-medium">
+                            Authentication Required
+                          </span>
                         </div>
-                      )}
+                        <p className="text-sm text-yellow-700 mt-1">
+                          You need to be logged in to upload with your profile.{" "}
+                          <Link
+                            href="/login"
+                            className="underline hover:no-underline"
+                          >
+                            Login here
+                          </Link>{" "}
+                          or check "Upload anonymously" above.
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Link to Request */}
@@ -943,7 +959,42 @@ export default function UploadPage() {
                     </div>
                   </div>
 
-                  
+                  {/* Email Notification */}
+                  <div className="space-y-4">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="notifyByEmail"
+                        checked={formData.notifyByEmail}
+                        onCheckedChange={(checked) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            notifyByEmail: checked as boolean,
+                          }))
+                        }
+                      />
+                      <Label htmlFor="notifyByEmail">
+                        Notify me by email when this resource is approved.
+                      </Label>
+                    </div>
+
+                    {formData.notifyByEmail && (
+                      <div className="space-y-2">
+                        <Label htmlFor="email">Email Address *</Label>
+                        <Input
+                          id="email"
+                          type="email"
+                          placeholder="your.email@university.edu"
+                          value={formData.email}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              email: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                    )}
+                  </div>
 
                   {/* Submit Button */}
                   <Button

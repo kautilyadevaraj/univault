@@ -307,7 +307,7 @@ export default function ResourceDetailPage() {
                     <User className="h-4 w-4 text-muted-foreground" />
                     <UserLink
                       username={resource.uploader.username}
-                      className="font-medium underline text-black hover:text-black"
+                      className="font-medium underline text-black hover:text-black dark:text-white"
                       
                     />
                   </div>

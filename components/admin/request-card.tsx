@@ -154,10 +154,11 @@ export function RequestCard({
             <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
               <span>
                 Requested by:{" "}
-                {request.requester && request.requester.length > 0
-                  ? request.requester
+                {request.email && request.requester.length > 0
+                  ? request.email.join(", ")
                   : "No one."}
               </span>
+
               <span>
                 Date: {new Date(request.requestDate).toLocaleDateString()}
               </span>
@@ -177,7 +178,7 @@ export function RequestCard({
             )}
           </div>
           <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-            {request.email && request.email.length > 0 && (
+            {/* {request.email && request.email.length > 0 && (
               <Dialog
                 open={isNotificationDialogOpen}
                 onOpenChange={setIsNotificationDialogOpen}
@@ -243,7 +244,7 @@ export function RequestCard({
                   </div>
                 </DialogContent>
               </Dialog>
-            )}
+            )} */}
 
             <Button
               disabled={actionLoading?.startsWith("fulfill-")}

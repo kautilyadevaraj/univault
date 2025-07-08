@@ -25,6 +25,7 @@ model Resource {
   tags            String[]
   yearOfCreation  Int?
   embedding       Unsupported("vector")?
+  email           String?
   user            User?                  @relation(fields: [uploaderId], references: [id])
 
   @@index([embedding])
@@ -54,7 +55,7 @@ model User {
   graduatingYear        Int?
   program               String?
   school                String?
-  username              String    @unique
+  username              String     @unique
   yearOfStudy           Int?
   bio                   String?
   profilePicture        String?

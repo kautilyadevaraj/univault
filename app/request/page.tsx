@@ -116,17 +116,6 @@ const courseYears = [
   "5th Year",
 ];
 
-const popularRequests = [
-  "Data Structures Final 2023",
-  "Calculus III Integration Notes",
-  "Operating Systems Lab Manual",
-  "Database Design Project Examples",
-  "Linear Algebra Midterm Solutions",
-  "Computer Networks Past Papers",
-  "Software Engineering Case Studies",
-  "Statistics Formula Sheet",
-];
-
 export default function RequestPage() {
   const {user} = useUserProfile();
   const [activeTab, setActiveTab] = useState("browse");

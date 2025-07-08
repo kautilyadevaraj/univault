@@ -48,8 +48,7 @@ export async function POST(req: NextRequest) {
       ? JSON.parse(formData.get("tags")!.toString())
       : [];
     const linkedRequestId = formData.get("linkedRequestId")?.toString() ?? null;
-    const uploadAnonymously =
-      formData.get("uploadAnonymously")?.toString() ?? "";
+    const email = formData.get("email")?.toString() ?? null;
 
     // get the file
     const file = formData.get("file") as File;
@@ -149,6 +148,7 @@ export async function POST(req: NextRequest) {
         fileUrl: key,
         status: "PENDING",
         uploaderId,
+        email
       },
     });
 

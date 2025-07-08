@@ -5,6 +5,7 @@ import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { randomUUID } from "crypto";
 import { db } from "@/lib/prisma";
 import { generateEmbedding, createResourceText } from "@/lib/gemini";
+import { sendMail } from "@/lib/mailer";
 
 const s3 = new S3Client({
   region: process.env.B2_REGION,
@@ -113,8 +114,30 @@ export async function POST(
       `;
     }
 
-    /* ─── request satisfied → remove row ───── */
-    await db.request.delete({ where: { id: id } });
+    if (original.email) {
+      const html = `
+    <p>Hi there,</p>
+    <p>Your request for <strong>${original.queryText}</strong> has been fulfilled 🎉!</p>
+    <p>You can download the material here: <a href="https://univault-portal.vercel.app/resource/${resource.id}">Link</a></p>
+    <hr/>
+    <small>You are receiving this because you opted in for notifications.</small>
+  `;
+
+      // 3. Send e-mails (Gmail allows comma-separated list)
+      await sendMail({
+        to: original.email,
+        subject: "Your resource request has been fulfilled",
+        html,
+      });
+
+    }
+    /* ─── request satisfied → update status ───── */
+    await db.request.update({
+      where: { id: id }, data: {
+      status: "FULFILLED"
+    } }
+      
+    );
 
     return NextResponse.json(resource, { status: 201 });
   } catch (err) {
