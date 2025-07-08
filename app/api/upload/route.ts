@@ -61,35 +61,33 @@ export async function POST(req: NextRequest) {
     let uploaderId: string | null = null;
     const supabase = await createClient();
 
-    if (uploadAnonymously === "false") {
-      try {
-        const {
-          data: { user },
-          error,
-        } = await supabase.auth.getUser();
+    try {
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser();
 
-        if (error) {
-          console.error("Auth error:", error);
-        }
-
-        if (user) {
-          // Get user profile from your custom User table
-          const { data: userProfile, error: profileError } = await supabase
-            .from("User")
-            .select("id")
-            .eq("authId", user.id)
-            .single();
-
-          if (profileError) {
-            console.error("Profile fetch error:", profileError);
-          } else if (userProfile) {
-            uploaderId = userProfile.id;
-          }
-        }
-      } catch (authError) {
-        console.error("Authentication check failed:", authError);
-        // Continue as anonymous upload
+      if (error) {
+        console.error("Auth error:", error);
       }
+
+      if (user) {
+        // Get user profile from your custom User table
+        const { data: userProfile, error: profileError } = await supabase
+          .from("User")
+          .select("id")
+          .eq("authId", user.id)
+          .single();
+
+        if (profileError) {
+          console.error("Profile fetch error:", profileError);
+        } else if (userProfile) {
+          uploaderId = userProfile.id;
+        }
+      }
+    } catch (authError) {
+      console.error("Authentication check failed:", authError);
+      // Continue as anonymous upload
     }
 
     // generate a random filename with same extension
