@@ -336,10 +336,6 @@ export default function ResourceDetailPage() {
                     {new Date(resource.uploadDate).toLocaleDateString()}
                   </span>
                 </div>
-                <div className="flex items-center gap-1">
-                  <Download className="h-4 w-4" />
-                  <span>{resource.downloads} downloads</span>
-                </div>
                 <Badge
                   variant={
                     resource.status === "APPROVED" ? "default" : "secondary"
