@@ -46,7 +46,7 @@ export default function HomePage() {
         <div className="w-full h-[95dvh] flex flex-row items-center justify-center font-overused-grotesk dark:text-muted text-foreground font-light overflow-hidden p-4 sm:p-8 md:p-12 lg:p-16">
           <LayoutGroup>
             <motion.p
-              className="flex whitespace-pre text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl"
+              className="flex whitespace-pre text-5xl sm:text-5xl md:text-5xl lg:text-6xl xl:text-7xl"
               layout
             >
               <motion.span
@@ -125,7 +125,7 @@ export default function HomePage() {
             </p>
             <div className="flex sm:flex-row gap-4 justify-center">
               <Button size="lg" asChild>
-                <Link href="/signup">Create Account</Link>
+                <Link href="/login">Create Account</Link>
               </Button>
               <Button size="lg" variant="outline" asChild>
                 <Link href="/search">Browse Resources</Link>
