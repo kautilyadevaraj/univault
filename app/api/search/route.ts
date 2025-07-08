@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/prisma";
 import { generateEmbedding } from "@/lib/gemini";
-import type { Resource } from "@prisma/client";
+import type { Resource } from "@/lib/generated/prisma";
 
 type ResourceWithUser = Resource & {
   user: {
