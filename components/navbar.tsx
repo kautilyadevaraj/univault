@@ -401,7 +401,7 @@ export function Navbar() {
                         variant="destructive"
                         onClick={handleLogout}
                         disabled={isLoggingOut}
-                        className="justify-start"
+                        className="justify-start ml-3"
                         size="lg"
                       >
                         {isLoggingOut ? (

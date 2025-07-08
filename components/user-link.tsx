@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { User } from "lucide-react";
+import { User, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface UserLinkProps {
@@ -25,6 +25,7 @@ export function UserLink({
     >
       {showIcon && <User className="h-3 w-3" />}
       <span className="truncate">{username}</span>
+      <ExternalLink className="h-3 w-3"/>
     </Link>
   );
 }

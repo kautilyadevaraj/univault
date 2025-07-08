@@ -16,6 +16,7 @@ import {
   ArrowUpDown,
   BookOpen,
   Sparkles,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,6 +57,7 @@ import { toast } from "sonner";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
 import { UserLink } from "@/components/user-link";
+import Link from "next/link";
 
 interface SearchResult {
   id: string;
@@ -99,9 +101,10 @@ function SearchResultSkeleton() {
             </div>
             <Skeleton className="h-4 w-48" />
           </div>
-          <div className="flex flex-row lg:flex-col gap-2 w-full lg:w-auto">
-            <Skeleton className="h-10 flex-1 lg:w-24" />
-            <Skeleton className="h-10 flex-1 lg:w-24" />
+          <div className="flex flex-col gap-2 lg:w-auto w-full">
+            <Skeleton className="h-10 w-full lg:w-24" />
+            <Skeleton className="h-10 w-full lg:w-24" />
+            <Skeleton className="h-10 w-full lg:w-24" />
           </div>
         </div>
       </CardHeader>
@@ -547,7 +550,7 @@ export default function SearchPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen py-8 px-4">
+      <div className="min-h-screen py-4 sm:py-8 px-4">
         <div className="max-w-6xl mx-auto">
           <Card className="text-center py-12">
             <CardHeader>
@@ -569,10 +572,10 @@ export default function SearchPage() {
   }
 
   return (
-    <div className="min-h-screen py-8 px-4">
+    <div className="min-h-screen py-4 sm:py-8 px-4">
       <div className="max-w-6xl mx-auto">
         {/* Search Header */}
-        <div className="mb-8">
+        <div className="mb-6 sm:mb-8">
           <div className="flex flex-col sm:flex-row gap-2 mb-6">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
@@ -608,7 +611,7 @@ export default function SearchPage() {
                 disabled={isSearching}
               >
                 <Filter className="h-4 w-4 mr-2" />
-                Filters
+                <span className="hidden sm:inline">Filters</span>
                 {selectedFilters &&
                   Object.values(selectedFilters).some(
                     (arr) => arr && arr.length > 0
@@ -643,9 +646,15 @@ export default function SearchPage() {
               onCheckedChange={setUseSmartSearch}
               disabled={isSearching}
             />
-            <Label htmlFor="smart-search" className="flex items-center gap-2">
+            <Label
+              htmlFor="smart-search"
+              className="flex items-center gap-2 text-sm sm:text-base"
+            >
               <Sparkles className="h-4 w-4 text-purple-500" />
-              Smart Search (AI-powered semantic search)
+              <span className="hidden sm:inline">
+                Smart Search (AI-powered semantic search)
+              </span>
+              <span className="sm:hidden">AI Search</span>
             </Label>
             {useSmartSearch && (
               <Badge
@@ -855,14 +864,19 @@ export default function SearchPage() {
           {/* Sort Control and Results Per Page */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div className="flex items-center gap-4">
-              <p className="text-muted-foreground">
+              <p className="text-muted-foreground text-sm sm:text-base">
                 {isSearching ? (
                   "Searching..."
                 ) : paginationData.totalResults > 0 ? (
                   <>
-                    Showing {paginationData.startIndex} to{" "}
-                    {paginationData.endIndex} of {paginationData.totalResults}{" "}
-                    results
+                    <span className="hidden sm:inline">
+                      Showing {paginationData.startIndex} to{" "}
+                      {paginationData.endIndex} of {paginationData.totalResults}{" "}
+                      results
+                    </span>
+                    <span className="sm:hidden">
+                      {paginationData.totalResults} results
+                    </span>
                     {useSmartSearch && debouncedQuery && (
                       <Badge
                         variant="outline"
@@ -884,17 +898,18 @@ export default function SearchPage() {
                 !isSearching && (
                   <Button variant="ghost" size="sm" onClick={clearAllFilters}>
                     <X className="h-4 w-4 mr-1" />
-                    Clear search
+                    <span className="hidden sm:inline">Clear search</span>
+                    <span className="sm:hidden">Clear</span>
                   </Button>
                 )}
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 w-full sm:w-auto">
               <Select
                 value={resultsPerPage.toString()}
                 onValueChange={handleResultsPerPageChange}
                 disabled={isSearching}
               >
-                <SelectTrigger className="">
+                <SelectTrigger className="w-full sm:w-auto">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -983,19 +998,19 @@ export default function SearchPage() {
                   <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-4">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
-                        <CardTitle className="text-lg">
+                        <CardTitle className="text-lg break-words">
                           {result.title}
                         </CardTitle>
                         {useSmartSearch && result.similarity && (
                           <Badge
                             variant="outline"
-                            className="text-purple-600 border-purple-300 text-xs"
+                            className="text-purple-600 border-purple-300 text-xs flex-shrink-0"
                           >
                             {Math.round(result.similarity * 100)}% match
                           </Badge>
                         )}
                       </div>
-                      <CardDescription className="text-base mb-3">
+                      <CardDescription className="text-base mb-3 break-words">
                         {result.description}
                       </CardDescription>
                       <div className="flex flex-wrap gap-2 mb-3">
@@ -1018,24 +1033,24 @@ export default function SearchPage() {
                           ))}
                       </div>
                       <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground mb-3">
-                        <div className="flex items-center justify-center gap-1">
-                          <User className="h-3 w-3" />
+                        <div className="flex items-center justify-center gap-1 min-w-0">
+                          <User className="h-3 w-3 flex-shrink-0" />
                           <UserLink
                             username={result.uploader}
-                            className="text-muted-foreground underline hover:text-black"
+                            className="text-muted-foreground underline hover:text-black truncate"
                           />
                         </div>
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1 flex-shrink-0">
                           <Calendar className="h-3 w-3" />
                           {result.uploadDate &&
                             new Date(result.uploadDate).toLocaleDateString()}
                         </div>
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1 flex-shrink-0">
                           {getFileIcon(result.fileType)}
                           {result.fileType && result.fileType.toUpperCase()}
                         </div>
                       </div>
-                      <div className="text-sm text-muted-foreground">
+                      <div className="text-sm text-muted-foreground break-words">
                         <span className="font-medium">{result.school}</span> •{" "}
                         {result.courseName} •{" "}
                         {courseYears[
@@ -1043,36 +1058,99 @@ export default function SearchPage() {
                         ] || `Year ${result.courseYear}`}
                       </div>
                     </div>
-                    <div className="flex flex-row lg:flex-col gap-2 w-full lg:w-auto">
-                      <Button
-                        variant="outline"
-                        onClick={() => handlePreview(result)}
-                        className="flex-1 lg:flex-none"
-                        disabled={loadingPreview === result.id}
-                      >
-                        {loadingPreview === result.id ? (
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        ) : (
-                          <Eye className="h-4 w-4 mr-2" />
-                        )}
-                        {loadingPreview === result.id
-                          ? "Loading..."
-                          : "Preview"}
-                      </Button>
-                      <Button
-                        onClick={() => handleDownload(result)}
-                        className="flex-1 lg:flex-none"
-                        disabled={downloadingResource === result.id}
-                      >
-                        {downloadingResource === result.id ? (
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        ) : (
-                          <Download className="h-4 w-4 mr-2" />
-                        )}
-                        {downloadingResource === result.id
-                          ? "Downloading..."
-                          : "Download"}
-                      </Button>
+
+                    {/* Improved responsive button layout */}
+                    <div className="flex flex-col gap-2 lg:w-auto w-full">
+                      {/* Desktop: Vertical stack */}
+                      <div className="hidden lg:flex lg:flex-col gap-2 mt-1">
+                        <Button
+                          variant="outline"
+                          onClick={() => handlePreview(result)}
+                          disabled={loadingPreview === result.id}
+                          size="sm"
+                        >
+                          {loadingPreview === result.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                          <span>Preview</span>
+                        </Button>
+                        <Link href={`/resource/${result.id}`}>
+                          <Button
+                            variant="outline"
+                            className="bg-transparent"
+                            size="sm"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                            <span>View Details</span>
+                          </Button>
+                        </Link>
+                        <Button
+                          onClick={() => handleDownload(result)}
+                          disabled={downloadingResource === result.id}
+                          size="sm"
+                        >
+                          {downloadingResource === result.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Download className="h-4 w-4" />
+                          )}
+                          <span>Download</span>
+                        </Button>
+                      </div>
+
+                      {/* Mobile: Two rows */}
+                      <div className="lg:hidden space-y-2">
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            onClick={() => handlePreview(result)}
+                            className="flex-1"
+                            disabled={loadingPreview === result.id}
+                            size="sm"
+                          >
+                            {loadingPreview === result.id ? (
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            ) : (
+                              <Eye className="h-4 w-4 mr-2" />
+                            )}
+                            <span className="truncate">Preview</span>
+                          </Button>
+
+                          <Link
+                            href={`/resource/${result.id}`}
+                            className="flex-1"
+                          >
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-full h-full bg-transparent"
+                            >
+                              <ExternalLink className="h-4 w-4 mr-2" />
+                              <span className="truncate">Details</span>
+                            </Button>
+                          </Link>
+                        </div>
+
+                        <Button
+                          onClick={() => handleDownload(result)}
+                          className="w-full"
+                          disabled={downloadingResource === result.id}
+                          size="sm"
+                        >
+                          {downloadingResource === result.id ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <Download className="h-4 w-4 mr-2" />
+                          )}
+                          <span className="truncate">
+                            {downloadingResource === result.id
+                              ? "Downloading..."
+                              : "Download"}
+                          </span>
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </CardHeader>
@@ -1084,9 +1162,9 @@ export default function SearchPage() {
         {/* Preview Dialog */}
         <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
           <DialogContent className="max-w-[95vw] sm:max-w-4xl p-0 flex flex-col">
-            <div className="flex-shrink-0 p-6 pb-0">
+            <div className="flex-shrink-0 p-4 sm:p-6 pb-0">
               <DialogHeader>
-                <DialogTitle className="text-lg sm:text-xl mb-2 pr-8 text-start">
+                <DialogTitle className="text-lg sm:text-xl mb-2 pr-8 text-start break-words">
                   {previewResource?.title}
                 </DialogTitle>
               </DialogHeader>
@@ -1094,7 +1172,7 @@ export default function SearchPage() {
 
             {previewResource && (
               <>
-                <ScrollArea className="flex px-6 min-h-0">
+                <ScrollArea className="flex px-4 sm:px-6 min-h-0">
                   <div className="space-y-4 pb-4">
                     <div className="space-y-4">
                       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
@@ -1165,7 +1243,7 @@ export default function SearchPage() {
                   </div>
                 </ScrollArea>
 
-                <div className="flex-shrink-0 flex flex-col sm:flex-row justify-end gap-2 p-6 pt-4 border-t rounded-b-lg bg-background">
+                <div className="flex-shrink-0 flex flex-col sm:flex-row justify-end gap-2 p-4 sm:p-6 pt-4 border-t rounded-b-lg bg-background">
                   <Button
                     variant="outline"
                     onClick={() => setIsPreviewOpen(false)}
