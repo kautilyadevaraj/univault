@@ -36,6 +36,7 @@ export async function GET(request: Request) {
 
   try {
     let resources;
+    await db.$connect();
 
     if (query && useSemanticSearch) {
       console.log("Using semantic search for:", query);
