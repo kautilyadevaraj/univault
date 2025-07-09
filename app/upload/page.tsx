@@ -202,6 +202,12 @@ export default function UploadPage() {
   };
 
   const handleFileSelect = (file: File) => {
+    const maxSize = 5 * 1024 * 1024; // 5MB - Temp fix.
+
+    if (file.size > maxSize) {
+      toast.error("File size exceeds 5MB limit. Choose a smaller file.");
+      return;
+    }
     setFormData((prev) => ({ ...prev, file }));
   };
 
