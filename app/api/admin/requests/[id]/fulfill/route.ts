@@ -21,6 +21,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await db.$connect();
     const { id } = await params;
     console.log(id)
     const original = await db.request.findUnique({ where: { id: id } });

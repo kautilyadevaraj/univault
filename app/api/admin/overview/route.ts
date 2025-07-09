@@ -23,6 +23,7 @@ export async function GET() {
     //
     // 1. Pending uploads
     //
+    await db.$connect();
     const pendingUploadsRaw = await db.resource.findMany({
       where: { status: "PENDING" },
       include: {

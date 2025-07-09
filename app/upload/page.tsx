@@ -128,7 +128,6 @@ export default function UploadPage() {
     notifyByEmail: false,
     email: "",
   });
-  console.log(formData)
   const [tagInput, setTagInput] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);

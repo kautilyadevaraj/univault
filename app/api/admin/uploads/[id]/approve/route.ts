@@ -24,6 +24,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await db.$connect();
     const { id } = await params;
     const contentType = req.headers.get("content-type") || "";
     const isFormData = contentType.includes("multipart/form-data");

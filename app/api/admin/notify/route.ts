@@ -3,8 +3,8 @@ import { db } from "@/lib/prisma";
 import { sendMail } from "@/lib/mailer";
 
 export async function POST(req: Request) {
+  await db.$connect();
   const { requestId, resourceId } = await req.json();
-    console.log("Request ID:", requestId);
   // 1. Fetch request and resource
   const request = await db.request.findUnique({ where: { id: requestId } });
 //   const resource = await db.resource.findUnique({

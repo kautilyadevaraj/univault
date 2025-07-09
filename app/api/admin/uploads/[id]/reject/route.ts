@@ -17,6 +17,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  await db.$connect();
   const {id} = await params;
   const existing = await db.resource.findUnique({ where: { id } });
   if (!existing)
