@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/prisma";
 import { z } from "zod";
 
 const subscribeSchema = z.object({
@@ -21,7 +21,7 @@ export async function POST(req: Request) {
 
     const { requestId, email } = parsed.data;
 
-    const existingRequest = await prisma.request.findUnique({
+    const existingRequest = await db.request.findUnique({
       where: { id: requestId },
       select: { email: true },
     });
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
 
     const updatedEmails = [...existingRequest.email, email];
 
-    await prisma.request.update({
+    await db.request.update({
       where: { id: requestId },
       data: { email: updatedEmails },
     });

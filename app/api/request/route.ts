@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/prisma";
 import { z } from "zod";
 
 const requestSchema = z.object({
@@ -15,7 +15,8 @@ const requestSchema = z.object({
 
 export async function GET() {
   try {
-    const requests = await prisma.request.findMany({
+    await db.$connect();
+    const requests = await db.request.findMany({
       where: { status: "PENDING" },
       orderBy: { createdAt: "desc" },
     });
@@ -53,7 +54,7 @@ export async function POST(req: Request) {
       tags,
     } = parseResult.data;
 
-    const newRequest = await prisma.request.create({
+    const newRequest = await db.request.create({
       data: {
         queryText,
         email,

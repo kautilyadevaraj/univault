@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/prisma";
 import { randomUUID } from "crypto";
 import { generateEmbedding, createResourceText } from "@/lib/gemini";
 import { createClient } from "@/utils/supabase/server";
@@ -28,6 +28,7 @@ const s3 = new S3Client({
 
 export async function POST(req: NextRequest) {
   try {
+    await db.$connect();
     const formData = await req.formData();
 
     // parse metadata fields
@@ -133,7 +134,7 @@ export async function POST(req: NextRequest) {
     }
 
     // create DB entry with status "PENDING"
-    const resource = await prisma.resource.create({
+    const resource = await db.resource.create({
       data: {
         title,
         description,
@@ -153,7 +154,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (embedding) {
-      await prisma.$executeRaw`
+      await db.$executeRaw`
         UPDATE "Resource" 
         SET embedding = ${JSON.stringify(embedding)}::vector 
         WHERE id = ${resource.id}

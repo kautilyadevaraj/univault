@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/prisma";
 import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 import { randomUUID } from "crypto";
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
     /* ---------------------------------------------------------------------- */
     /* 2.2 Fetch the pending request                                          */
     /* ---------------------------------------------------------------------- */
-    const pendingRequest = await prisma.request.findUnique({
+    const pendingRequest = await db.request.findUnique({
       where: { id: requestId },
     });
 
@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
     /* ---------------------------------------------------------------------- */
     /* 5.  Create Resource entry                                              */
     /* ---------------------------------------------------------------------- */
-    const newResource = await prisma.resource.create({
+    const newResource = await db.resource.create({
       data: {
         title: pendingRequest.queryText,
         description: null,
@@ -132,7 +132,7 @@ export async function POST(req: NextRequest) {
     /* ---------------------------------------------------------------------- */
     /* 6.  Mark request as fulfilled (file uploaded)                          */
     /* ---------------------------------------------------------------------- */
-    await prisma.request.update({
+    await db.request.update({
       where: { id: requestId },
       data: { fulfillUploadURL: key },
     });

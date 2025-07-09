@@ -4,6 +4,7 @@ import { createClient } from "@/utils/supabase/server";
 
 export async function GET(_req: NextRequest) {
   try {
+    await db.$connect();
     const supabase = await createClient();
     const {
       data: { user },

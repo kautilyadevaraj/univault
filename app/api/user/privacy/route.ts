@@ -1,20 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/prisma";
-import { cookies } from "next/headers";
-import { verifyToken } from "@/lib/auth";
+import { createClient } from "@/utils/supabase/server";
 
 export async function PUT(req: NextRequest) {
   try {
-    const token = (await cookies()).get("univault_token")?.value;
+    await db.$connect();
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
 
-    if (!token) {
+    if (error || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const result = verifyToken(token);
-
-    if (!result || !result.email) {
-      return NextResponse.json({ error: "Invalid Token" }, { status: 403 });
     }
 
     const body = await req.json();
@@ -80,7 +78,7 @@ export async function PUT(req: NextRequest) {
     // Update user privacy settings
     const updatedUser = await db.user.update({
       where: {
-        email: result.email,
+        email: user.email,
       },
       data: privacyData,
       select: {
