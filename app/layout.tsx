@@ -5,6 +5,7 @@ import { Navbar } from "@/components/navbar";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const figtree = Figtree({
   subsets: ["latin"],
@@ -23,20 +24,19 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body
-        className={` ${figtree.variable} antialiased`}
-      >
+      <body className={` ${figtree.variable} antialiased`}>
         <ThemeProvider
-            attribute="class"
-            defaultTheme="light"
-            enableSystem
-            disableTransitionOnChange
-          >
-        <Navbar />
-        <main className="pt-16">{children}</main>
-        <Toaster richColors closeButton />
+          attribute="class"
+          defaultTheme="light"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <Navbar />
+          <main className="pt-16">{children}</main>
+          <Toaster richColors closeButton />
         </ThemeProvider>
-        <Analytics/>
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
