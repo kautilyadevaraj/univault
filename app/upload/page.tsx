@@ -110,7 +110,7 @@ interface NotificationFormData {
 }
 
 export default function UploadPage() {
-  const { user } = useUserProfile();
+  const { user, loading } = useUserProfile();
   const [formData, setFormData] = useState<UploadFormData>({
     title: "",
     description: "",
@@ -475,7 +475,7 @@ export default function UploadPage() {
                       </Label>
                     </div>
 
-                    {!formData.uploadAnonymously && !user && (
+                    {!formData.uploadAnonymously && !user && !loading && (
                       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                         <div className="flex items-center gap-2 text-yellow-800">
                           <User className="h-4 w-4" />
@@ -684,7 +684,7 @@ export default function UploadPage() {
                               const file = e.target.files?.[0];
                               if (file) handleFileSelect(file);
                             }}
-                            accept=".pdf,.doc,.docx,.ppt,.pptx,.txt"
+                            accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.zip"
                           />
                           <Button type="button" variant="outline" asChild>
                             <label
@@ -698,7 +698,7 @@ export default function UploadPage() {
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Supported formats: PDF, DOC, DOCX, PPT, PPTX, TXT (Max
+                      Supported formats: PDF, DOC, DOCX, PPT, PPTX, TXT, ZIP (Max
                       5MB)
                     </p>
                   </div>
