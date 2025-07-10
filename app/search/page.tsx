@@ -1037,7 +1037,7 @@ export default function SearchPage() {
                           <User className="h-3 w-3 flex-shrink-0" />
                           <UserLink
                             username={result.uploader}
-                            className="text-muted-foreground underline hover:text-black truncate"
+                            className="text-muted-foreground underline dark:hover:text-white hover:text-black truncate"
                           />
                         </div>
                         <div className="flex items-center gap-1 flex-shrink-0">

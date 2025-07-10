@@ -423,7 +423,7 @@ export default function UserProfilePage() {
                                 href={link}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm break-all"
+                                className="flex items-center gap-2 underline text-sm break-all"
                               >
                                 <ExternalLink className="h-3 w-3 flex-shrink-0" />
                                 {link}
