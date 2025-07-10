@@ -1,5 +1,4 @@
 "use client";
-
 import { useState, useEffect, useMemo } from "react";
 import {
   Search,
@@ -17,6 +16,8 @@ import {
   BookOpen,
   Sparkles,
   ExternalLink,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -143,6 +144,7 @@ export default function SearchPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [useSmartSearch, setUseSmartSearch] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [showAllTags, setShowAllTags] = useState(false);
 
   // Frontend pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -192,7 +194,7 @@ export default function SearchPage() {
     setIsSearching(isLoading);
   }, [isLoading]);
 
-  // Generate filter options from search results - with null checks
+  // Generate filter options from search results - with null checks and tag frequency counting
   const filterOptions = useMemo(() => {
     const defaultFilters = {
       tags: [],
@@ -201,13 +203,14 @@ export default function SearchPage() {
       resourceTypes: [],
       fileTypes: [],
       courseYears: [],
+      tagFrequency: {} as Record<string, number>,
     };
 
     if (!searchResults || !Array.isArray(searchResults)) {
       return defaultFilters;
     }
 
-    const tags = new Set<string>();
+    const tagFrequency: Record<string, number> = {};
     const schools = new Set<string>();
     const programs = new Set<string>();
     const resourceTypes = new Set<string>();
@@ -215,9 +218,13 @@ export default function SearchPage() {
     const courseYears = new Set<string>();
 
     searchResults.forEach((result) => {
-      // Add null checks for each property
+      // Count tag frequencies
       if (result.tags && Array.isArray(result.tags)) {
-        result.tags.forEach((tag) => tag && tags.add(tag));
+        result.tags.forEach((tag) => {
+          if (tag) {
+            tagFrequency[tag] = (tagFrequency[tag] || 0) + 1;
+          }
+        });
       }
       if (result.school) schools.add(result.school);
       if (result.program) programs.add(result.program);
@@ -226,13 +233,21 @@ export default function SearchPage() {
       if (result.courseYear) courseYears.add(result.courseYear);
     });
 
+    // Sort tags by frequency (descending) then alphabetically
+    const sortedTags = Object.keys(tagFrequency).sort((a, b) => {
+      const freqDiff = tagFrequency[b] - tagFrequency[a];
+      if (freqDiff !== 0) return freqDiff;
+      return a.localeCompare(b);
+    });
+
     return {
-      tags: Array.from(tags).sort(),
+      tags: sortedTags,
       schools: Array.from(schools).sort(),
       programs: Array.from(programs).sort(),
       resourceTypes: Array.from(resourceTypes).sort(),
       fileTypes: Array.from(fileTypes).sort(),
       courseYears: Array.from(courseYears).sort(),
+      tagFrequency,
     };
   }, [searchResults]);
 
@@ -255,7 +270,6 @@ export default function SearchPage() {
       const query = debouncedQuery.toLowerCase();
       filtered = filtered.filter((result) => {
         if (!result) return false;
-
         return (
           (result.title && result.title.toLowerCase().includes(query)) ||
           (result.description &&
@@ -412,7 +426,6 @@ export default function SearchPage() {
   ) => {
     setSelectedFilters((prev) => {
       if (!prev || !prev[category]) return prev;
-
       return {
         ...prev,
         [category]: prev[category].includes(value)
@@ -449,7 +462,6 @@ export default function SearchPage() {
   async function handlePreview(resource: SearchResult) {
     setLoadingPreview(resource.id);
     setPreviewResource(resource);
-
     if (!previewUrls[resource.id]) {
       try {
         const res = await fetch(
@@ -465,14 +477,12 @@ export default function SearchPage() {
         return;
       }
     }
-
     setLoadingPreview(null);
     setIsPreviewOpen(true);
   }
 
   async function handleDownload(resource: SearchResult) {
     setDownloadingResource(resource.id);
-
     try {
       let url = previewUrls[resource.id];
       if (!url) {
@@ -495,7 +505,6 @@ export default function SearchPage() {
 
   const getFileIcon = (fileType: string) => {
     if (!fileType) return <File className="h-3 w-3" />;
-
     switch (fileType.toLowerCase()) {
       case "pdf":
         return <FileText className="h-3 w-3" />;
@@ -689,14 +698,38 @@ export default function SearchPage() {
                     </Button>
                   )}
               </div>
-
               <div className="space-y-4">
-                {/* Tags */}
+                {/* Tags with Show More/Less functionality */}
                 {filterOptions.tags && filterOptions.tags.length > 0 && (
                   <div>
-                    <h4 className="text-sm font-medium mb-2">Tags</h4>
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-sm font-medium">Tags</h4>
+                      {filterOptions.tags.length > 10 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowAllTags(!showAllTags)}
+                          className="text-xs h-auto p-1"
+                          disabled={isSearching}
+                        >
+                          {showAllTags ? (
+                            <>
+                              Show Less <ChevronUp className="h-3 w-3 ml-1" />
+                            </>
+                          ) : (
+                            <>
+                              Show More ({filterOptions.tags.length - 10} more){" "}
+                              <ChevronDown className="h-3 w-3 ml-1" />
+                            </>
+                          )}
+                        </Button>
+                      )}
+                    </div>
                     <div className="flex flex-wrap gap-2">
-                      {filterOptions.tags.map((tag) => (
+                      {(showAllTags
+                        ? filterOptions.tags
+                        : filterOptions.tags.slice(0, 10)
+                      ).map((tag) => (
                         <Badge
                           key={tag}
                           variant={
@@ -713,6 +746,9 @@ export default function SearchPage() {
                           }
                         >
                           {tag}
+                          <span className="ml-1 text-xs opacity-70">
+                            ({filterOptions.tagFrequency[tag]})
+                          </span>
                           {selectedFilters.tags &&
                             selectedFilters.tags.includes(tag) && (
                               <X className="h-3 w-3 ml-1" />
@@ -1058,7 +1094,6 @@ export default function SearchPage() {
                         ] || `Year ${result.courseYear}`}
                       </div>
                     </div>
-
                     {/* Improved responsive button layout */}
                     <div className="flex flex-col gap-2 lg:w-auto w-full">
                       {/* Desktop: Vertical stack */}
@@ -1099,7 +1134,6 @@ export default function SearchPage() {
                           <span>Download</span>
                         </Button>
                       </div>
-
                       {/* Mobile: Two rows */}
                       <div className="lg:hidden space-y-2">
                         <div className="flex gap-2">
@@ -1117,7 +1151,6 @@ export default function SearchPage() {
                             )}
                             <span className="truncate">Preview</span>
                           </Button>
-
                           <Link
                             href={`/resource/${result.id}`}
                             className="flex-1"
@@ -1132,7 +1165,6 @@ export default function SearchPage() {
                             </Button>
                           </Link>
                         </div>
-
                         <Button
                           onClick={() => handleDownload(result)}
                           className="w-full"
@@ -1169,7 +1201,6 @@ export default function SearchPage() {
                 </DialogTitle>
               </DialogHeader>
             </div>
-
             {previewResource && (
               <>
                 <ScrollArea className="flex px-4 sm:px-6 min-h-0">
@@ -1185,7 +1216,6 @@ export default function SearchPage() {
                           </span>
                         </div>
                       </div>
-
                       {(() => {
                         const url = previewUrls[previewResource.id];
                         if (!url) {
@@ -1198,7 +1228,6 @@ export default function SearchPage() {
                             </div>
                           );
                         }
-
                         if (
                           previewResource.fileType &&
                           previewResource.fileType.toLowerCase() === "pdf"
@@ -1242,7 +1271,6 @@ export default function SearchPage() {
                     </div>
                   </div>
                 </ScrollArea>
-
                 <div className="flex-shrink-0 flex flex-col sm:flex-row justify-end gap-2 p-4 sm:p-6 pt-4 border-t rounded-b-lg bg-background">
                   <Button
                     variant="outline"
@@ -1292,7 +1320,6 @@ export default function SearchPage() {
                     }
                   />
                 </PaginationItem>
-
                 {generatePaginationItems().map((item, index) => (
                   <PaginationItem key={index}>
                     {item === "ellipsis" ? (
@@ -1312,7 +1339,6 @@ export default function SearchPage() {
                     )}
                   </PaginationItem>
                 ))}
-
                 <PaginationItem>
                   <PaginationNext
                     href="#"
