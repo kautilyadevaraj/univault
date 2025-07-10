@@ -165,8 +165,11 @@ export default function UploadPage() {
   }, []);
 
   const suggestedTags = [
+    "CIE-1",
+    "CIE-2",
+    "CIE-3",
     "Midterm",
-    "Final",
+    "SEE",
     "Quiz",
     "Notes",
     "Past Papers",
