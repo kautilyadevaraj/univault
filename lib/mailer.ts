@@ -32,7 +32,7 @@ export async function sendMail({
   });
 
   await transport.sendMail({
-    from: `"University Resources" <${process.env.SENDER_EMAIL}>`,
+    from: `"UniVault" <${process.env.SENDER_EMAIL}>`,
     to,
     subject,
     html,
