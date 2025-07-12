@@ -14,6 +14,7 @@ import {
   UserCircle,
   ChevronDown,
   Loader2,
+  MessageCircleQuestionMark
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -50,6 +51,7 @@ export function Navbar() {
     { href: "/search", label: "Search", icon: Search },
     { href: "/upload", label: "Upload", icon: Upload },
     { href: "/request", label: "Request", icon: MessageSquare },
+    { href: "/help", label: "Help", icon: MessageCircleQuestionMark },
   ];
 
   const adminLinks = [];

@@ -149,16 +149,13 @@ export default function HomePage() {
               <li className="hover:underline cursor-pointer">
                 <Link href="/request">Request</Link>
               </li>
+            </ul>
+            <ul className="space-y-1 sm:space-y-2">
               <li className="hover:underline cursor-pointer">
                 <Link href="/login">Join Us</Link>
               </li>
-            </ul>
-            <ul className="space-y-1 sm:space-y-2">
-              <li className="hover:underline cursor-pointer">About</li>
               <li className="hover:underline cursor-pointer">
-                <Link href="mailto:univault.info@gmail.com" target="_blank">
-                  Help
-                </Link>
+                <Link href="/help">Help</Link>
               </li>
               <li className="hover:underline cursor-pointer">
                 <Link

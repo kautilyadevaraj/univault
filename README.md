@@ -1,5 +1,5 @@
 # UniVault
-[![Ask DeepWiki](https://devin.ai/assets/askdeepwiki.png)](https://deepwiki.com/kautilyadevaraj/univault)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/kautilyadevaraj/univault)
 
 UniVault is a modern, collaborative platform for university students to share, find, and request academic resources. It features an AI-powered semantic search, a robust admin moderation system, and user-centric features to create a thriving community resource hub.
 The website can be accessed here - https://univault-portal.vercel.app/
