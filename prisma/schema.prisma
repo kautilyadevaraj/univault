@@ -30,6 +30,7 @@ model Resource {
   user            User?                  @relation(fields: [uploaderId], references: [id])
 
   @@index([embedding])
+  @@index([uploaderId])
 }
 
 model Request {
@@ -46,6 +47,8 @@ model Request {
   tags             String[]
   fulfillUploadURL String?
   email            String[]
+
+  @@index([requesterId])
 }
 
 model User {
@@ -70,4 +73,8 @@ model User {
   authId                String?    @unique
   resources             Resource[]
   provider              String?
+
+  @@index([id])
+  @@index([role])
+  @@index([email])
 }
