@@ -402,7 +402,6 @@ export function Navbar() {
                       <Button
                         variant="destructive"
                         onClick={handleLogout}
-                        disabled={isLoggingOut}
                         className="justify-start ml-3"
                         size="lg"
                       >
