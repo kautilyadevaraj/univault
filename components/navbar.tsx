@@ -113,7 +113,7 @@ export function Navbar() {
 
             <div className="flex items-center space-x-2 md:hidden">
               <Theme />
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" disabled>
                 <Menu className="h-5 w-5" />
               </Button>
             </div>

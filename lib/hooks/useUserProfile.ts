@@ -13,55 +13,35 @@ export function useUserProfile() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const getProfile = async () => {
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-
-        if (session?.user) {
-          setUser(session.user);
-
-          // Fetch user profile from your custom Users table
-          const { data: userProfile } = await supabase
-            .from("User")
-            .select("*")
-            .eq("authId", session.user.id)
-            .single();
-
-          setProfile(userProfile);
-        }
-      } catch (error) {
-        console.error("Error fetching user profile:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    getProfile();
-
+    // onAuthStateChange fires on initial load and any time auth state changes.
+    // This is the single source of truth for user session.
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === "SIGNED_IN" && session?.user) {
-        setUser(session.user);
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
 
-        // Fetch user profile
+      if (currentUser) {
+        // If a user is logged in, fetch their profile
         const { data: userProfile } = await supabase
           .from("User")
           .select("*")
-          .eq("authId", session.user.id)
+          .eq("authId", currentUser.id)
           .single();
-
         setProfile(userProfile);
-      } else if (event === "SIGNED_OUT") {
-        setUser(null);
+      } else {
+        // If no user, clear the profile
         setProfile(null);
       }
+
+      // Once session and profile are handled, loading is complete.
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    // Unsubscribe from the listener when the component unmounts
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   return { user, profile, loading };
