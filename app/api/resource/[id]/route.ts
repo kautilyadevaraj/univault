@@ -1,20 +1,7 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/prisma";
-import type { Resource } from "@/lib/generated/prisma";
+import { createClient } from "@/utils/supabase/server";
 
-type ResourceWithUser = Resource & {
-  user: {
-    id: string;
-    username: string;
-    email: string;
-    school: string | null;
-    program: string | null;
-    graduatingYear: number | null;
-    profilePicture: string | null;
-    bio: string | null;
-  } | null;
-};
-
+// 1. Define Response Interface (Same as before)
 interface DetailedResourceResponse {
   id: string;
   title: string;
@@ -50,7 +37,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await db.$connect();
+    const supabase = await createClient();
     const { id } = await params;
 
     if (!id) {
@@ -60,54 +47,61 @@ export async function GET(
       );
     }
 
-    // Fetch the main resource with user details
-    const resource = await db.resource.findUnique({
-      where: {
-        id: id,
-        status: "APPROVED", // Only show approved resources
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            username: true,
-            email: true,
-            school: true,
-            program: true,
-            graduatingYear: true,
-            profilePicture: true,
-            bio: true,
-          },
-        },
-      },
-    });
+    // 2. Fetch Resource + User Details
+    // We use the relation syntax: table_alias:ForeignTable!ForeignKey (columns)
+    const { data: resource, error } = await supabase
+      .from("Resource")
+      .select(
+        `
+        *,
+        user:User!uploaderId (
+          id,
+          username,
+          email,
+          school,
+          program,
+          graduatingYear,
+          profilePicture,
+          bio
+        )
+      `
+      )
+      .eq("id", id)
+      .eq("status", "APPROVED")
+      .single();
 
-    if (!resource) {
+    if (error || !resource) {
+      console.error("Fetch error or not found:", error);
       return NextResponse.json(
         { error: "Resource not found" },
         { status: 404 }
       );
     }
 
-    // Format the response with proper null handling
+    // 3. Map to clean Response Object
+    // Note: 'user' comes back as an object (or null) because of the relation
+    const uploaderData = resource.user as any;
+
     const detailedResource: DetailedResourceResponse = {
       id: resource.id,
       title: resource.title,
       description: resource.description ?? "",
-      tags: resource.tags,
+      tags: resource.tags || [],
       uploader: {
-        id: resource.user?.id ?? "",
-        username: resource.user?.username ?? "Anonymous",
-        email: resource.user?.email ?? "",
-        school: resource.user?.school ?? "",
-        program: resource.user?.program ?? "",
-        graduatingYear: resource.user?.graduatingYear ?? null,
-        profilePicture: resource.user?.profilePicture ?? null,
-        bio: resource.user?.bio ?? "",
+        id: uploaderData?.id ?? "",
+        username: uploaderData?.username ?? "Anonymous",
+        email: uploaderData?.email ?? "",
+        school: uploaderData?.school ?? "",
+        program: uploaderData?.program ?? "",
+        graduatingYear: uploaderData?.graduatingYear ?? null,
+        profilePicture: uploaderData?.profilePicture ?? null,
+        bio: uploaderData?.bio ?? "",
       },
-      uploadDate: resource.createdAt.toISOString(),
-      fileType: resource.fileUrl.split(".").pop()?.toLowerCase() ?? "unknown",
-      downloads: 0, // Placeholder - you can implement download tracking
+      uploadDate: new Date(resource.createdAt).toISOString(),
+      fileType: resource.fileUrl
+        ? resource.fileUrl.split(".").pop()?.toLowerCase()
+        : "unknown",
+      downloads: 0,
       school: resource.school ?? "",
       program: resource.program ?? "",
       courseName: resource.courseName ?? "",
@@ -120,7 +114,7 @@ export async function GET(
     };
 
     return NextResponse.json(detailedResource);
-  } catch (error) {
+  } catch (error: any) {
     console.error("[GET /api/resource/[id]]", error);
     return NextResponse.json(
       { error: "Failed to fetch resource details" },
@@ -129,36 +123,43 @@ export async function GET(
   }
 }
 
-// Optional: Add a PATCH endpoint for updating resource details (admin only)
+// 4. PATCH Endpoint (Admin/Owner Update)
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await db.$connect();
+    const supabase = await createClient();
     const { id } = await params;
     const body = await request.json();
 
-    // Add authentication/authorization logic here
-    // For now, this is a placeholder
+    // Prepare update object (whitelist fields for safety)
+    const updates = {
+      title: body.title,
+      description: body.description,
+      tags: body.tags,
+      courseName: body.courseName,
+      courseYear: body.courseYear,
+      program: body.program,
+      school: body.school,
+      resourceType: body.resourceType,
+      yearOfCreation: body.yearOfCreation,
+    };
 
-    const updatedResource = await db.resource.update({
-      where: { id },
-      data: {
-        title: body.title,
-        description: body.description,
-        tags: body.tags,
-        courseName: body.courseName,
-        courseYear: body.courseYear,
-        program: body.program,
-        school: body.school,
-        resourceType: body.resourceType,
-        yearOfCreation: body.yearOfCreation,
-      },
-    });
+    // Perform Update
+    const { data: updatedResource, error } = await supabase
+      .from("Resource")
+      .update(updates)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
 
     return NextResponse.json(updatedResource);
-  } catch (error) {
+  } catch (error: any) {
     console.error("[PATCH /api/resource/[id]]", error);
     return NextResponse.json(
       { error: "Failed to update resource" },
