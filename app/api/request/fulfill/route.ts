@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-import { db } from "@/lib/prisma";
-import { cookies } from "next/headers";
-import { jwtVerify } from "jose";
 import { randomUUID } from "crypto";
 import { z } from "zod";
+import { createClient } from "@/utils/supabase/server";
 
 /* -------------------------------------------------------------------------- */
 /* 1.  AWS / B2 client                                                        */
@@ -18,8 +16,6 @@ const s3 = new S3Client({
   },
 });
 
-const JWT_SECRET = process.env.JWT_SECRET!;
-
 /* -------------------------------------------------------------------------- */
 /* 2.  Payload validation                                                     */
 /* -------------------------------------------------------------------------- */
@@ -31,6 +27,7 @@ const fulfillSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
+    const supabase = await createClient();
     const formData = await req.formData();
 
     /* ---------------------------------------------------------------------- */
@@ -49,16 +46,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { requestId, uploadAnonymously} = parseResult.data;
+    const { requestId, uploadAnonymously } = parseResult.data;
 
     /* ---------------------------------------------------------------------- */
     /* 2.2 Fetch the pending request                                          */
     /* ---------------------------------------------------------------------- */
-    const pendingRequest = await db.request.findUnique({
-      where: { id: requestId },
-    });
+    const { data: pendingRequest, error: fetchError } = await supabase
+      .from("Request")
+      .select("*")
+      .eq("id", requestId)
+      .single();
 
-    if (!pendingRequest) {
+    if (fetchError || !pendingRequest) {
       return NextResponse.json({ error: "Request not found" }, { status: 404 });
     }
 
@@ -79,18 +78,28 @@ export async function POST(req: NextRequest) {
 
     /* 3.1 Generate uploaderId unless anonymous                               */
     let uploaderId: string | null = null;
+
     if (!uploadAnonymously) {
-      const token = (await cookies()).get("univault_token")?.value;
-      if (token) {
-        try {
-          const { payload } = await jwtVerify(
-            token,
-            new TextEncoder().encode(JWT_SECRET)
-          );
-          uploaderId = (payload as any).userId;
-        } catch {
-          /* Invalid token → treat as anonymous                                */
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (user) {
+          // Resolve public User ID from Auth ID
+          const { data: userProfile } = await supabase
+            .from("User")
+            .select("id")
+            .eq("authId", user.id)
+            .maybeSingle();
+
+          if (userProfile) {
+            uploaderId = userProfile.id;
+          }
         }
+      } catch (authError) {
+        // Fallback to anonymous if auth check fails
+        console.warn("Auth check failed during fulfill:", authError);
       }
     }
 
@@ -112,8 +121,9 @@ export async function POST(req: NextRequest) {
     /* ---------------------------------------------------------------------- */
     /* 5.  Create Resource entry                                              */
     /* ---------------------------------------------------------------------- */
-    const newResource = await db.resource.create({
-      data: {
+    const { data: newResource, error: insertError } = await supabase
+      .from("Resource")
+      .insert({
         title: pendingRequest.queryText,
         description: null,
         fileUrl: key,
@@ -126,17 +136,28 @@ export async function POST(req: NextRequest) {
         linkedRequestId: requestId,
         uploaderId,
         status: "PENDING", // will be reviewed by admin
-      },
-    });
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error("Resource creation failed:", insertError);
+      throw new Error("Failed to save resource record");
+    }
 
     /* ---------------------------------------------------------------------- */
     /* 6.  Mark request as fulfilled (file uploaded)                          */
     /* ---------------------------------------------------------------------- */
-    await db.request.update({
-      where: { id: requestId },
-      data: { fulfillUploadURL: key },
-    });
+    const { error: updateError } = await supabase
+      .from("Request")
+      .update({ fulfillUploadURL: key })
+      .eq("id", requestId);
 
+    if (updateError) {
+      console.error("Request update failed:", updateError);
+      // Note: We don't throw here because the resource is already created.
+      // Ideally, you'd use a transaction or clean up, but for now we log it.
+    }
 
     return NextResponse.json(
       {

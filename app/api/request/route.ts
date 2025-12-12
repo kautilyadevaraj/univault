@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/prisma";
+import { createClient } from "@/utils/supabase/server";
 import { z } from "zod";
 
+// Zod Schema (Unchanged)
 const requestSchema = z.object({
   queryText: z.string().min(1, "Query is required"),
   email: z.array(z.string().email()).optional().default([]),
@@ -15,11 +16,18 @@ const requestSchema = z.object({
 
 export async function GET() {
   try {
-    await db.$connect();
-    const requests = await db.request.findMany({
-      where: { status: "PENDING" },
-      orderBy: { createdAt: "desc" },
-    });
+    const supabase = await createClient();
+
+    // Fetch all PENDING requests
+    const { data: requests, error } = await supabase
+      .from("Request")
+      .select("*")
+      .eq("status", "PENDING")
+      .order("createdAt", { ascending: false });
+
+    if (error) {
+      throw error;
+    }
 
     return NextResponse.json(requests, { status: 200 });
   } catch (error) {
@@ -33,7 +41,10 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    const supabase = await createClient();
     const body = await req.json();
+
+    // Validate Input
     const parseResult = requestSchema.safeParse(body);
 
     if (!parseResult.success) {
@@ -54,8 +65,10 @@ export async function POST(req: Request) {
       tags,
     } = parseResult.data;
 
-    const newRequest = await db.request.create({
-      data: {
+    // Insert into Supabase
+    const { data: newRequest, error } = await supabase
+      .from("Request")
+      .insert({
         queryText,
         email,
         school,
@@ -65,8 +78,13 @@ export async function POST(req: Request) {
         resourceType,
         tags,
         status: "PENDING",
-      },
-    });
+      })
+      .select()
+      .single(); // Needed to return the newly created object
+
+    if (error) {
+      throw error;
+    }
 
     return NextResponse.json(
       { message: "Request submitted successfully", request: newRequest },
