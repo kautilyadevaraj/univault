@@ -126,7 +126,7 @@ export async function POST(
 
       // 3. Send e-mails (Gmail allows comma-separated list)
       await sendMail({
-        to: original.email,
+        to: original.email.join(", "),
         subject: "Your resource request has been fulfilled",
         html,
       });
