@@ -1,44 +1,65 @@
-// /admin/overview/route.ts
 import { NextResponse } from "next/server";
-import { db } from "@/lib/prisma";
-import type { Resource, Request } from "@/lib/generated/prisma";
-
-// Define types for the complex query results
-type ResourceWithUser = Resource & {
-  user: {
-    username: string;
-  } | null;
-};
-
-type UserSelect = {
-  id: string;
-  username: string;
-  email: string;
-  role: string;
-  createdAt: Date;
-};
+import { createClient } from "@/utils/supabase/server";
 
 export async function GET() {
   try {
-    //
-    // 1. Pending uploads
-    //
-    await db.$connect();
-    const pendingUploadsRaw = await db.resource.findMany({
-      where: { status: "PENDING" },
-      include: {
-        user: { select: { username: true } },
-      },
-      orderBy: { createdAt: "desc" },
-    });
+    const supabase = await createClient();
 
-    const pendingUploads = pendingUploadsRaw.map((u: ResourceWithUser) => ({
+    // Fire all independent queries in parallel to save time
+    const [
+      pendingUploadsRes,
+      pendingRequestsRes,
+      linkedResourcesRes,
+      usersRes,
+      allResourceIdsRes,
+      allRequestIdsRes,
+    ] = await Promise.all([
+      // 1. Get Pending Uploads
+      supabase
+        .from("Resource")
+        .select("*, user:User!uploaderId(username)")
+        .eq("status", "PENDING")
+        .order("createdAt", { ascending: false }),
+
+      // 2. Get Pending Requests
+      supabase
+        .from("Request")
+        .select("*")
+        .eq("status", "PENDING")
+        .order("createdAt", { ascending: false }),
+
+      // 3. Get Linked Request IDs (for the 'hasResource' check)
+      supabase
+        .from("Resource")
+        .select("linkedRequestId")
+        .not("linkedRequestId", "is", null),
+
+      // 4. Get All Users (For the user table)
+      // Warning: Eventually you will need pagination here!
+      supabase
+        .from("User")
+        .select("id, username, email, role, createdAt")
+        .order("createdAt", { ascending: false }),
+
+      // 5. Get ALL Resource IDs (To calculate user stats efficiently)
+      supabase.from("Resource").select("uploaderId"),
+
+      // 6. Get ALL Request IDs (To calculate user stats efficiently)
+      supabase.from("Request").select("requesterId"),
+    ]);
+
+    // Check for any major errors
+    if (pendingUploadsRes.error) throw pendingUploadsRes.error;
+    if (usersRes.error) throw usersRes.error;
+
+    // --- PROCESS 1: Pending Uploads ---
+    const pendingUploads = (pendingUploadsRes.data || []).map((u: any) => ({
       id: u.id,
       title: u.title,
       description: u.description ?? "",
       uploader: u.user?.username ?? "Anonymous",
-      uploadDate: u.createdAt.toISOString(),
-      fileType: u.fileUrl.split(".").pop()?.toUpperCase() ?? "",
+      uploadDate: new Date(u.createdAt).toISOString(),
+      fileType: u.fileUrl ? u.fileUrl.split(".").pop()?.toUpperCase() : "",
       tags: u.tags,
       status: u.status.toLowerCase(),
       school: u.school ?? "",
@@ -48,30 +69,23 @@ export async function GET() {
       courseName: u.courseName ?? "",
       resourceType: u.resourceType ?? "",
       linkedRequestId: u.linkedRequestId,
-      fileUrl: u.fileUrl
+      fileUrl: u.fileUrl,
     }));
 
-    //
-    // 2. Pending requests
-    //
-    const linked = await db.resource.findMany({
-      where: { linkedRequestId: { not: null } },
-      select: { linkedRequestId: true },
-    });
-    const linkMap = new Map(linked.map((r) => [r.linkedRequestId, true]));
+    // --- PROCESS 2: Pending Requests ---
+    const linkSet = new Set(
+      (linkedResourcesRes.data || [])
+        .map((r) => r.linkedRequestId)
+        .filter(Boolean)
+    );
 
-    const pendingRequestsRaw = await db.request.findMany({
-      where: { status: "PENDING" },
-      orderBy: { createdAt: "desc" },
-    });
-
-    const pendingRequests = pendingRequestsRaw.map((r: Request) => ({
+    const pendingRequests = (pendingRequestsRes.data || []).map((r: any) => ({
       id: r.id,
       request: r.queryText,
-      requester: r.email ?? "Anonymous",
-      requestDate: r.createdAt.toISOString(),
-      status: r.status.toLowerCase(), // "pending"
-      hasResource: linkMap.has(r.id),
+      requester: r.email ?? "Anonymous", // Note: Prisma 'requesterId' relation wasn't used in your DTO, just email
+      requestDate: new Date(r.createdAt).toISOString(),
+      status: r.status.toLowerCase(),
+      hasResource: linkSet.has(r.id),
       fulfillUploadURL: r.fulfillUploadURL ?? null,
       email: r.email,
       school: r.school,
@@ -79,54 +93,44 @@ export async function GET() {
       courseYear: r.courseYear,
       courseName: r.courseName,
       resourceType: r.resourceType,
-      tags: r.tags
+      tags: r.tags,
     }));
 
-    //
-    // 3. Users with counts
-    //
-    const usersRaw = await db.user.findMany({
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        role: true,
-        createdAt: true,
-      },
+    // --- PROCESS 3: User Stats (The Optimization) ---
+    // Instead of querying DB for every user, we count in memory
+
+    // Create Frequency Maps
+    const uploadCounts: Record<string, number> = {};
+    (allResourceIdsRes.data || []).forEach((r: any) => {
+      if (r.uploaderId) {
+        uploadCounts[r.uploaderId] = (uploadCounts[r.uploaderId] || 0) + 1;
+      }
     });
 
-    // For each user, count resources and requests
-    const users = await Promise.all(
-      usersRaw.map(async (u: UserSelect) => {
-        const uploadsCount = await db.resource.count({
-          where: { uploaderId: u.id },
-        });
-        const requestsCount = await db.request.count({
-          where: { requesterId: u.id },
-        });
+    const requestCounts: Record<string, number> = {};
+    (allRequestIdsRes.data || []).forEach((r: any) => {
+      if (r.requesterId) {
+        requestCounts[r.requesterId] = (requestCounts[r.requesterId] || 0) + 1;
+      }
+    });
 
-        return {
-          id: u.id,
-          name: u.username,
-          email: u.email,
-          role: u.role.toLowerCase(), // "member" or "admin"
-          joinDate: u.createdAt.toISOString(),
-          uploads: uploadsCount,
-          requests: requestsCount,
-        };
-      })
-    );
+    // Map Users
+    const users = (usersRes.data || []).map((u: any) => ({
+      id: u.id,
+      name: u.username,
+      email: u.email,
+      role: u.role?.toLowerCase() ?? "member",
+      joinDate: new Date(u.createdAt).toISOString(),
+      uploads: uploadCounts[u.id] || 0, // O(1) lookup
+      requests: requestCounts[u.id] || 0, // O(1) lookup
+    }));
 
-    //
-    // 4. Return DTO
-    //
     return NextResponse.json({
       uploads: pendingUploads,
       requests: pendingRequests,
       users,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("[GET /api/admin/overview]", error);
     return NextResponse.json(
       { error: "Failed to load admin overview" },
