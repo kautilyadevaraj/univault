@@ -118,7 +118,7 @@ export async function POST(
     if (original.email) {
       const html = `
     <p>Hi there,</p>
-    <p>Your request for <strong>${original.queryText}</strong> has been fulfilled 🎉!</p>
+    <p>Your request for <strong>${original.queryText}</strong> has been fulfilled!</p>
     <p>You can download the material here: <a href="https://univault-portal.vercel.app/resource/${resource.id}">Link</a></p>
     <hr/>
     <small>You are receiving this because you opted in for notifications.</small>
