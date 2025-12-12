@@ -6,8 +6,9 @@ import {
   PutObjectCommand,
 } from "@aws-sdk/client-s3";
 import { randomUUID } from "crypto";
-import { db } from "@/lib/prisma";
+import { createClient } from "@/utils/supabase/server";
 import { generateEmbedding, createResourceText } from "@/lib/gemini";
+import type { EmbeddingData } from "@/lib/gemini";
 import { sendMail } from "@/lib/mailer";
 
 const s3 = new S3Client({
@@ -24,7 +25,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await db.$connect();
+    const supabase = await createClient();
     const { id } = await params;
     const contentType = req.headers.get("content-type") || "";
     const isFormData = contentType.includes("multipart/form-data");
@@ -32,23 +33,31 @@ export async function POST(
     /* ──────────────────────────────────────────────────────────────────
        1. Find the pending upload
     ────────────────────────────────────────────────────────────────── */
-    const existing = await db.resource.findUnique({ where: { id } });
-    if (!existing)
+    const { data: existing, error: fetchError } = await supabase
+      .from("Resource")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (fetchError || !existing) {
       return NextResponse.json(
         { error: "Resource not found" },
         { status: 404 }
       );
+    }
 
     /* ──────────────────────────────────────────────────────────────────
-       2. Handle file replacement (only when admin attached a new file)
+       2. Handle file replacement (S3 Operations)
     ────────────────────────────────────────────────────────────────── */
     let fileUrl = existing.fileUrl;
+    let updates: any = {}; // Object to hold fields we want to update
+
     if (isFormData) {
       const form = await req.formData();
       const newFile = form.get("file") as File | null;
 
       if (newFile) {
-        /* delete old file (pending or uploads) */
+        // A. Delete old file
         await s3.send(
           new DeleteObjectCommand({
             Bucket: process.env.B2_BUCKET_NAME!,
@@ -56,9 +65,10 @@ export async function POST(
           })
         );
 
-        /* upload new one straight to /uploads */
+        // B. Upload new file directly to 'uploads/'
         const ext = newFile.name.split(".").pop()!;
         fileUrl = `uploads/${randomUUID()}.${ext}`;
+
         await s3.send(
           new PutObjectCommand({
             Bucket: process.env.B2_BUCKET_NAME!,
@@ -68,8 +78,9 @@ export async function POST(
           })
         );
       } else if (existing.fileUrl.startsWith("pending/")) {
-        /* same file ⇒ just move pending → uploads */
+        // C. Move pending file to uploads
         fileUrl = existing.fileUrl.replace("pending/", "uploads/");
+
         await s3.send(
           new CopyObjectCommand({
             Bucket: process.env.B2_BUCKET_NAME!,
@@ -85,27 +96,28 @@ export async function POST(
         );
       }
 
-      /* ───── Parse/assign updated metadata fields ───── */
+      /* ───── Parse Metadata ───── */
       const parseIntField = (key: string) =>
         form.get(key) ? parseInt(form.get(key)!.toString(), 10) : undefined;
 
-      existing.title = form.get("title")?.toString() ?? existing.title;
-      existing.description =
+      // Build update object dynamically
+      updates.title = form.get("title")?.toString() ?? existing.title;
+      updates.description =
         form.get("description")?.toString() ?? existing.description;
-      existing.school = form.get("school")?.toString() ?? existing.school;
-      existing.program = form.get("program")?.toString() ?? existing.program;
-      existing.yearOfCreation =
+      updates.school = form.get("school")?.toString() ?? existing.school;
+      updates.program = form.get("program")?.toString() ?? existing.program;
+      updates.yearOfCreation =
         parseIntField("yearOfCreation") ?? existing.yearOfCreation;
-      existing.courseYear = parseIntField("courseYear") ?? existing.courseYear;
-      existing.courseName =
+      updates.courseYear = parseIntField("courseYear") ?? existing.courseYear;
+      updates.courseName =
         form.get("courseName")?.toString() ?? existing.courseName;
-      existing.resourceType =
+      updates.resourceType =
         form.get("resourceType")?.toString() ?? existing.resourceType;
-      existing.tags = form.get("tags")
+      updates.tags = form.get("tags")
         ? JSON.parse(form.get("tags")!.toString())
         : existing.tags;
     } else if (existing.fileUrl.startsWith("pending/")) {
-      /* simple approval with no metadata changes */
+      // Simple approval (no form data), just move file
       const fileName = existing.fileUrl.substring("pending/".length);
       fileUrl = `uploads/${fileName}`;
 
@@ -124,86 +136,94 @@ export async function POST(
       );
     }
 
+    // Add final fileUrl and status to updates
+    updates.fileUrl = fileUrl;
+    updates.status = "APPROVED";
+
     /* ──────────────────────────────────────────────────────────────────
        3. Conditionally create an embedding
-       • Only when the upload is linked to a request
     ────────────────────────────────────────────────────────────────── */
+    // Note: We check if metadata changed OR if it's a new approval
+    // Ideally, we regenerate embedding if any text field changed.
+    // For simplicity, we regenerate if there's a linked request (per your logic)
     if (existing.linkedRequestId) {
       try {
-        const resourceText = createResourceText({
-          title: existing.title,
-          description: existing.description,
-          courseName: existing.courseName,
-          courseYear: existing.courseYear,
-          program: existing.program,
-          resourceType: existing.resourceType,
-          school: existing.school,
-          tags: existing.tags,
-          yearOfCreation: existing.yearOfCreation,
-        });
+        const resourceData: EmbeddingData = {
+          title: updates.title ?? existing.title,
+          description: updates.description ?? existing.description,
+          courseName: updates.courseName ?? existing.courseName,
+          courseYear: updates.courseYear ?? existing.courseYear,
+          program: updates.program ?? existing.program,
+          resourceType: updates.resourceType ?? existing.resourceType,
+          school: updates.school ?? existing.school,
+          tags: updates.tags ?? existing.tags,
+          yearOfCreation: updates.yearOfCreation ?? existing.yearOfCreation,
+        };
+
+        const resourceText = createResourceText(resourceData);
         const embedding = await generateEmbedding(resourceText);
-        await db.$executeRaw`
-          UPDATE "Resource"
-          SET embedding = ${JSON.stringify(embedding)}::vector
-          WHERE id = ${existing.id}
-        `;
+
+        // Add embedding to the update payload
+        updates.embedding = embedding;
       } catch (embErr) {
-        console.error("Embedding generation failed:", embErr);
-        /* Embedding is optional—approval proceeds even if it fails */
+        console.error(
+          "Embedding generation failed (continuing approval):",
+          embErr
+        );
       }
     }
 
     /* ──────────────────────────────────────────────────────────────────
-       4. Persist final update
+       4. Persist Updates to Supabase
     ────────────────────────────────────────────────────────────────── */
-    const updated = await db.resource.update({
-      where: { id },
-      data: {
-        status: "APPROVED",
-        fileUrl,
-        title: existing.title,
-        description: existing.description,
-        school: existing.school,
-        program: existing.program,
-        yearOfCreation: existing.yearOfCreation,
-        courseYear: existing.courseYear,
-        courseName: existing.courseName,
-        resourceType: existing.resourceType,
-        tags: existing.tags,
-      },
-    });
+    const { data: updatedResource, error: updateError } = await supabase
+      .from("Resource")
+      .update(updates)
+      .eq("id", id)
+      .select()
+      .single();
 
+    if (updateError) throw new Error(updateError.message);
+
+    // Update Linked Request Status
     if (existing.linkedRequestId) {
-      // the upload originated from a /request; update the status of that request record
-      await db.request.update({
-        where: { id: existing.linkedRequestId },
-        data: {
-          status: "FULFILLED"
-        }
-      });
+      await supabase
+        .from("Request")
+        .update({ status: "FULFILLED" })
+        .eq("id", existing.linkedRequestId);
     }
 
+    /* ──────────────────────────────────────────────────────────────────
+       5. Send Email (SAFE MODE)
+    ────────────────────────────────────────────────────────────────── */
     if (existing.email) {
-      const html = `
-    <p>Hi there,</p>
-    <p>Your upload request for <strong>${existing.title}</strong> has been approved 🎉!</p>
-    <p>You can find the uploaded resource here: <a href="https://univault-portal.vercel.app/resource/${existing.id}">Link</a></p>
-    <br/>Thank you for contributing to the community!
-    <hr/>
-    <small>You are receiving this because you opted in for notifications.</small>
-  `;
-  await sendMail({
-    to: existing.email,
-    subject: "Your resource upload request has been approved!",
-    html,
-  });
+      // Wrap in try-catch so 'invalid_grant' doesn't crash the API
+      try {
+        const html = `
+          <p>Hi there,</p>
+          <p>Your upload request for <strong>${updatedResource.title}</strong> has been approved 🎉!</p>
+          <p>You can find the uploaded resource here: <a href="https://univault-portal.vercel.app/resource/${updatedResource.id}">Link</a></p>
+          <br/>Thank you for contributing to the community!
+          <hr/>
+          <small>You are receiving this because you opted in for notifications.</small>
+        `;
+
+        await sendMail({
+          to: existing.email,
+          subject: "Your resource upload request has been approved!",
+          html,
+        });
+      } catch (mailError) {
+        console.error("⚠️ EMAIL FAILED (Approval Successful):", mailError);
+        // We do NOT throw here, so the response returns 200 OK
+      }
     }
 
-    return NextResponse.json(updated);
-  } catch (error) {
+    return NextResponse.json(updatedResource);
+  } catch (error: any) {
     console.error("[UPLOAD_APPROVE_ERROR]", error);
     return NextResponse.json(
-      { error: "Failed to approve upload" },
+      { error: error.message || "Failed to approve upload" },
       { status: 500 }
     );
   }

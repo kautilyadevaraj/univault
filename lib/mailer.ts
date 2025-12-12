@@ -1,40 +1,36 @@
-import { google } from "googleapis";
 import nodemailer from "nodemailer";
-
-const oAuth2Client = new google.auth.OAuth2(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET,
-  process.env.GOOGLE_REDIRECT_URI
-);
-oAuth2Client.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN });
 
 export async function sendMail({
   to,
   subject,
   html,
 }: {
-  to: string | string[];
+  to: string;
   subject: string;
   html: string;
 }) {
-  const { token } = await oAuth2Client.getAccessToken();
+  try {
+    const transport = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.MAIL_USER,
+        pass: process.env.MAIL_PASS, // The 16-char App Password
+      },
+    });
 
-  const transport = nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-      type: "OAuth2",
-      user: process.env.SENDER_EMAIL,
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      refreshToken: process.env.GOOGLE_REFRESH_TOKEN,
-      accessToken: token as string,
-    },
-  });
+    await transport.verify(); // Test connection
 
-  await transport.sendMail({
-    from: `"UniVault" <${process.env.SENDER_EMAIL}>`,
-    to,
-    subject,
-    html,
-  });
+    const result = await transport.sendMail({
+      from: `"Univault" <${process.env.MAIL_USER}>`,
+      to,
+      subject,
+      html,
+    });
+
+    console.log("Message sent: %s", result.messageId);
+    return result;
+  } catch (error) {
+    console.error("Error sending email:", error);
+    // Don't throw here to succeed even if email fails
+  }
 }
