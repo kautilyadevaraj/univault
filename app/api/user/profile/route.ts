@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/prisma";
 import { createClient } from "@/utils/supabase/server";
 
 export async function GET(_req: NextRequest) {
   try {
-    await db.$connect();
     const supabase = await createClient();
+
+    // 1. Authenticate
     const {
       data: { user },
       error,
@@ -15,38 +15,48 @@ export async function GET(_req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Fetch user profile from your custom User table using authId
-    const userProfile = await db.user.findUnique({
-      where: { authId: user.id },
-      include: {
-        resources: {
-          orderBy: { createdAt: "desc" },
-          select: {
-            id: true,
-            title: true,
-            description: true,
-            status: true,
-            createdAt: true,
-            courseName: true,
-            resourceType: true,
-            tags: true,
-          },
-        },
-      },
-    });
+    // 2. Fetch User Profile + Resources
+    // We join the Resource table and alias it as 'resources'
+    const { data: userProfile, error: fetchError } = await supabase
+      .from("User")
+      .select(
+        `
+        *,
+        resources:Resource (
+          id,
+          title,
+          description,
+          status,
+          createdAt,
+          courseName,
+          resourceType,
+          tags
+        )
+      `
+      )
+      .eq("authId", user.id)
+      .single();
 
-    if (!userProfile) {
+    if (fetchError || !userProfile) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // Derive helper data the frontend expects
-    const approvedResources = userProfile.resources.filter(
-      (r) => r.status === "APPROVED"
-    );
-    const pendingResources = userProfile.resources.filter(
-      (r) => r.status === "PENDING"
+    // 3. Process Resources (Sort & Filter in JS)
+    // Supabase returns the relation as an array.
+    const rawResources = userProfile.resources || [];
+
+    // Sort descending by date (matches Prisma's orderBy: { createdAt: "desc" })
+    const allResources = (rawResources as any[]).sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
 
+    const approvedResources = allResources.filter(
+      (r) => r.status === "APPROVED"
+    );
+    const pendingResources = allResources.filter((r) => r.status === "PENDING");
+
+    // 4. Construct Payload
     const payload = {
       // Core profile fields
       id: userProfile.id,
@@ -71,7 +81,7 @@ export async function GET(_req: NextRequest) {
       showContributionScore: userProfile.showContributionScore,
 
       // Resources
-      resources: userProfile.resources,
+      resources: allResources,
       approvedResourcesCount: approvedResources.length,
       pendingResourcesCount: pendingResources.length,
     };
@@ -83,14 +93,14 @@ export async function GET(_req: NextRequest) {
       { error: "Internal server error" },
       { status: 500 }
     );
-  } finally {
-    await db.$disconnect();
   }
 }
 
 export async function PUT(req: Request) {
   try {
     const supabase = await createClient();
+
+    // 1. Authenticate
     const {
       data: { user },
       error,
@@ -112,12 +122,11 @@ export async function PUT(req: Request) {
       socialLinks,
     } = body;
 
-    // Update user profile by authId instead of email
-    const updatedUser = await db.user.update({
-      where: {
-        authId: user.id,
-      },
-      data: {
+    // 2. Update via Supabase
+    // We update the row where authId matches the authenticated user
+    const { data: updatedUser, error: updateError } = await supabase
+      .from("User")
+      .update({
         username,
         yearOfStudy,
         graduatingYear,
@@ -125,8 +134,15 @@ export async function PUT(req: Request) {
         program,
         bio,
         socialLinks,
-      },
-    });
+      })
+      .eq("authId", user.id)
+      .select()
+      .single();
+
+    if (updateError) {
+      console.error("Update error:", updateError);
+      throw updateError;
+    }
 
     return NextResponse.json(updatedUser);
   } catch (error) {
@@ -135,7 +151,5 @@ export async function PUT(req: Request) {
       { error: "Failed to update profile" },
       { status: 500 }
     );
-  } finally {
-    await db.$disconnect();
   }
 }

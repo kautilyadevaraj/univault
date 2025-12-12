@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/prisma";
 import { createClient } from "@/utils/supabase/server";
 
 export async function PUT(req: NextRequest) {
   try {
-    await db.$connect();
     const supabase = await createClient();
+
+    // 1. Authenticate User
     const {
       data: { user },
       error,
@@ -17,7 +17,7 @@ export async function PUT(req: NextRequest) {
 
     const body = await req.json();
 
-    // Define allowed privacy fields to prevent unauthorized updates
+    // 2. Define Allowed Fields (Whitelist)
     const allowedPrivacyFields = [
       "profileVisibility",
       "showEmail",
@@ -27,16 +27,16 @@ export async function PUT(req: NextRequest) {
       "showContributionScore",
     ];
 
-    // Filter the request body to only include privacy fields
+    // Filter body
     const privacyData: Record<string, any> = {};
-
     for (const [key, value] of Object.entries(body)) {
       if (allowedPrivacyFields.includes(key)) {
         privacyData[key] = value;
       }
     }
 
-    // Validate profileVisibility enum if provided
+    // 3. Validation Logic
+    // Validate profileVisibility enum
     if (privacyData.profileVisibility) {
       const validVisibilityOptions = ["PUBLIC", "SCHOOL_ONLY", "PRIVATE"];
       if (!validVisibilityOptions.includes(privacyData.profileVisibility)) {
@@ -67,7 +67,6 @@ export async function PUT(req: NextRequest) {
       }
     }
 
-    // Check if there are any valid fields to update
     if (Object.keys(privacyData).length === 0) {
       return NextResponse.json(
         { error: "No valid privacy fields provided" },
@@ -75,32 +74,38 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    // Update user privacy settings
-    const updatedUser = await db.user.update({
-      where: {
-        email: user.email,
-      },
-      data: privacyData,
-      select: {
-        id: true,
-        profileVisibility: true,
-        showEmail: true,
-        showSchoolInfo: true,
-        showGraduationYear: true,
-        showResourceCount: true,
-        showContributionScore: true,
-      },
-    });
+    // 4. Update via Supabase
+    // We update the row where authId matches the authenticated user's ID
+    const { data: updatedUser, error: updateError } = await supabase
+      .from("User")
+      .update(privacyData)
+      .eq("authId", user.id) // Using authId is safer than email
+      .select(
+        `
+        id,
+        profileVisibility,
+        showEmail,
+        showSchoolInfo,
+        showGraduationYear,
+        showResourceCount,
+        showContributionScore
+      `
+      )
+      .single();
+
+    if (updateError) {
+      throw updateError;
+    }
 
     return NextResponse.json({
       message: "Privacy settings updated successfully",
       data: updatedUser,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("[PUT /api/user/privacy]", error);
     return NextResponse.json(
       { error: "Failed to update privacy settings" },
       { status: 500 }
     );
-  } 
+  }
 }

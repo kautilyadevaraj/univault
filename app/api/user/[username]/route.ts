@@ -1,14 +1,12 @@
-// src/app/api/user/[username]/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/prisma";
-import { cookies } from "next/headers";
-import { verifyToken } from "@/lib/auth";
+import { createClient } from "@/utils/supabase/server";
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ username: string }> }
 ) {
   try {
+    const supabase = await createClient();
     const { username } = await params;
 
     if (!username) {
@@ -18,46 +16,70 @@ export async function GET(
       );
     }
 
-    // Get the requesting user's information (for SCHOOL_ONLY visibility check)
-    let requestingUser = null;
-    const token = (await cookies()).get("univault_token")?.value;
+    // --------------------------------------------------------------------------
+    // 1. Get Requesting User Info (For Permission Checks)
+    // --------------------------------------------------------------------------
+    let requestingUser: {
+      id: string;
+      school: string | null;
+      email: string;
+    } | null = null;
 
-    if (token) {
-      const result = verifyToken(token);
-      if (result?.email) {
-        requestingUser = await db.user.findUnique({
-          where: { email: result.email },
-          select: { id: true, school: true, email: true },
-        });
+    // Check if a user is logged in via Supabase Auth
+    const {
+      data: { user: authUser },
+    } = await supabase.auth.getUser();
+
+    if (authUser) {
+      // Fetch their profile data to check school match
+      const { data: profile } = await supabase
+        .from("User")
+        .select("id, school, email")
+        .eq("authId", authUser.id) // Assuming authId links User table to auth.users
+        .maybeSingle();
+
+      if (profile) {
+        requestingUser = profile;
       }
     }
 
-    // Find the target user by username
-    const targetUser = await db.user.findUnique({
-      where: { username: username },
-      include: {
-        resources: {
-          where: { status: "APPROVED" }, // Only approved resources for public view
-          orderBy: { createdAt: "desc" },
-          select: {
-            id: true,
-            title: true,
-            description: true,
-            status: true,
-            createdAt: true,
-            courseName: true,
-            resourceType: true,
-            tags: true,
-          },
-        },
-      },
-    });
+    // --------------------------------------------------------------------------
+    // 2. Fetch Target User + Approved Resources
+    // --------------------------------------------------------------------------
+    // We use a single query to get the user and their approved resources
+    const { data: targetUser, error } = await supabase
+      .from("User")
+      .select(
+        `
+        *,
+        resources:Resource(
+          id,
+          title,
+          description,
+          status,
+          createdAt,
+          courseName,
+          resourceType,
+          tags
+        )
+      `
+      )
+      .eq("username", username)
+      .single();
 
-    if (!targetUser) {
+    if (error || !targetUser) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // Check profile visibility permissions
+    // Filter resources in memory (since Supabase relationship filters can be tricky on 'select')
+    // We strictly want APPROVED resources for public profile views
+    const approvedResources = (targetUser.resources || []).filter(
+      (r: any) => r.status === "APPROVED"
+    );
+
+    // --------------------------------------------------------------------------
+    // 3. Check Visibility Permissions
+    // --------------------------------------------------------------------------
     const canViewProfile = checkProfileVisibility(targetUser, requestingUser);
 
     if (!canViewProfile.allowed) {
@@ -67,25 +89,26 @@ export async function GET(
       );
     }
 
-    // Calculate stats
-    const approvedResources = targetUser.resources.filter(
-      (r) => r.status === "APPROVED"
-    );
+    // --------------------------------------------------------------------------
+    // 4. Calculate Stats & Build Payload
+    // --------------------------------------------------------------------------
     const resourceCount = approvedResources.length;
-    const contributionScore = resourceCount * 10; // 10 points per approved resource
+    const contributionScore = resourceCount * 10;
 
-    // Build response based on privacy settings
+    // Start building response object
     const payload: any = {
       id: targetUser.id,
       username: targetUser.username,
       createdAt: targetUser.createdAt,
       profileVisibility: targetUser.profileVisibility,
-      bio: targetUser.bio, // Bio is always shown if it exists
+      bio: targetUser.bio,
       profilePicture: targetUser.profilePicture,
       socialLinks: targetUser.socialLinks || [],
     };
 
-    // Add email if user allows it to be shown
+    // Conditional Fields Logic
+
+    // -- Email --
     if (targetUser.showEmail && targetUser.email) {
       payload.email = targetUser.email;
       payload.showEmail = true;
@@ -93,14 +116,13 @@ export async function GET(
       payload.showEmail = false;
     }
 
-    // Add school information if user allows it
+    // -- School Info --
     if (targetUser.showSchoolInfo) {
       payload.school = targetUser.school;
       payload.program = targetUser.program;
       payload.yearOfStudy = targetUser.yearOfStudy;
       payload.showSchoolInfo = true;
 
-      // Add graduation year if separately allowed
       if (targetUser.showGraduationYear) {
         payload.graduatingYear = targetUser.graduatingYear;
         payload.showGraduationYear = true;
@@ -112,7 +134,7 @@ export async function GET(
       payload.showGraduationYear = false;
     }
 
-    // Add resource count if user allows it
+    // -- Stats --
     if (targetUser.showResourceCount) {
       payload.resourceCount = resourceCount;
       payload.showResourceCount = true;
@@ -120,7 +142,6 @@ export async function GET(
       payload.showResourceCount = false;
     }
 
-    // Add contribution score if user allows it
     if (targetUser.showContributionScore) {
       payload.contributionScore = contributionScore;
       payload.showContributionScore = true;
@@ -128,8 +149,11 @@ export async function GET(
       payload.showContributionScore = false;
     }
 
-    // Always include public resources (already filtered to approved only)
-    payload.publicResources = targetUser.resources;
+    // Attach filtered resources (sorted by date desc)
+    payload.publicResources = approvedResources.sort(
+      (a: any, b: any) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
 
     return NextResponse.json(payload);
   } catch (err) {
@@ -138,8 +162,6 @@ export async function GET(
       { error: "Internal server error" },
       { status: 500 }
     );
-  } finally {
-    await db.$disconnect();
   }
 }
 
@@ -148,7 +170,7 @@ export async function GET(
  */
 function checkProfileVisibility(
   targetUser: any,
-  requestingUser: any
+  requestingUser: { id: string; school: string | null } | null
 ): { allowed: boolean; message?: string; status?: number } {
   switch (targetUser.profileVisibility) {
     case "PUBLIC":
@@ -163,7 +185,8 @@ function checkProfileVisibility(
         };
       }
 
-      if (requestingUser.school !== targetUser.school) {
+      // Check if schools match (and ensure school is actually set)
+      if (!targetUser.school || requestingUser.school !== targetUser.school) {
         return {
           allowed: false,
           message: "This profile is only visible to members of the same school",
@@ -174,6 +197,7 @@ function checkProfileVisibility(
       return { allowed: true };
 
     case "PRIVATE":
+      // Only the user themselves can view their private profile
       if (!requestingUser || requestingUser.id !== targetUser.id) {
         return {
           allowed: false,
@@ -185,6 +209,7 @@ function checkProfileVisibility(
       return { allowed: true };
 
     default:
+      // Default fail-safe
       return {
         allowed: false,
         message: "Invalid profile visibility setting",
