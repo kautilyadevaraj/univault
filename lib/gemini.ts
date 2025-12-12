@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI, GenerativeModel } from "@google/generative-ai";
-import type { Resource } from "./generated/prisma";
 
-interface EmbeddingData {
+// 1. Define the interfaces locally so we don't need Prisma imports
+export interface EmbeddingData {
   title: string;
   description: string | null;
   courseName: string | null;
@@ -13,18 +13,15 @@ interface EmbeddingData {
   yearOfCreation: number | null;
 }
 
-// Type for embedding values
-type EmbeddingValues = number[];
+// Minimal shape needed for the resource embedding helper
+interface ResourcePartial extends EmbeddingData {
+  [key: string]: any; // Allow other fields
+}
 
-// Initialize Gemini AI
+export type EmbeddingValues = number[];
+
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
-/**
- * Generate embedding for a given text using Gemini API
- * @param text - The text to generate embedding for
- * @returns Promise<number[]> - Array of embedding values
- * @throws Error if embedding generation fails
- */
 export async function generateEmbedding(
   text: string
 ): Promise<EmbeddingValues> {
@@ -34,32 +31,24 @@ export async function generateEmbedding(
     }
 
     const model: GenerativeModel = genAI.getGenerativeModel({
-      model: "models/text-embedding-004",
+      model: "models/gemini-embedding-001",
     });
 
     const result = await model.embedContent(text.replace(/\n/g, " "));
-
+    
     if (!result.embedding?.values) {
       throw new Error("Invalid embedding response from Gemini API");
     }
 
-    return result.embedding.values;
-  } catch (error) {
+    return result.embedding.values.slice(0, 768);;
+  } catch (error: any) {
     console.error("Error generating embedding:", error);
-
-    if (error instanceof Error) {
-      throw new Error(`Failed to generate embedding: ${error.message}`);
-    } else {
-      throw new Error("Failed to generate embedding: Unknown error");
-    }
+    throw new Error(
+      `Failed to generate embedding: ${error.message || "Unknown error"}`
+    );
   }
 }
 
-/**
- * Create searchable text from resource object
- * @param resource - Resource object to create text from
- * @returns string - Combined text for embedding generation
- */
 export function createResourceText(resource: EmbeddingData): string {
   if (!resource) {
     throw new Error("Resource object cannot be null or undefined");
@@ -82,24 +71,25 @@ export function createResourceText(resource: EmbeddingData): string {
   return parts.join(" ").trim();
 }
 
-/**
- * Generate embedding for a resource object
- * @param resource - Resource object to generate embedding for
- * @returns Promise<number[]> - Array of embedding values
- */
+// Updated to use the local interface instead of Prisma Resource
 export async function generateResourceEmbedding(
-  resource: Resource
+  resource: ResourcePartial
 ): Promise<EmbeddingValues> {
-  const resourceText = createResourceText(resource);
+  const resourceData: EmbeddingData = {
+    title: resource.title,
+    description: resource.description,
+    courseName: resource.courseName,
+    courseYear: resource.courseYear,
+    program: resource.program,
+    resourceType: resource.resourceType,
+    school: resource.school,
+    tags: resource.tags,
+    yearOfCreation: resource.yearOfCreation,
+  };
+  const resourceText = createResourceText(resourceData);
   return await generateEmbedding(resourceText);
 }
 
-/**
- * Calculate cosine similarity between two embeddings
- * @param embedding1 - First embedding vector
- * @param embedding2 - Second embedding vector
- * @returns number - Cosine similarity score (0-1)
- */
 export function calculateCosineSimilarity(
   embedding1: EmbeddingValues,
   embedding2: EmbeddingValues
@@ -121,12 +111,7 @@ export function calculateCosineSimilarity(
   magnitude1 = Math.sqrt(magnitude1);
   magnitude2 = Math.sqrt(magnitude2);
 
-  if (magnitude1 === 0 || magnitude2 === 0) {
-    return 0;
-  }
+  if (magnitude1 === 0 || magnitude2 === 0) return 0;
 
   return dotProduct / (magnitude1 * magnitude2);
 }
-
-// Export types for use in other files
-export type { Resource, EmbeddingValues };

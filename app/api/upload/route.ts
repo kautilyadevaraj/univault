@@ -1,21 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-import { db } from "@/lib/prisma";
 import { randomUUID } from "crypto";
 import { generateEmbedding, createResourceText } from "@/lib/gemini";
+import type { EmbeddingData } from "@/lib/gemini"; // Import types from gemini now
 import { createClient } from "@/utils/supabase/server";
-
-interface EmbeddingData {
-  title: string;
-  description: string | null;
-  courseName: string | null;
-  courseYear: number | null;
-  program: string | null;
-  resourceType: string;
-  school: string | null;
-  tags: string[];
-  yearOfCreation: number | null;
-}
 
 const s3 = new S3Client({
   region: process.env.B2_REGION,
@@ -28,10 +16,10 @@ const s3 = new S3Client({
 
 export async function POST(req: NextRequest) {
   try {
-    await db.$connect();
+    const supabase = await createClient();
     const formData = await req.formData();
 
-    // parse metadata fields
+    // 1. Parse Metadata
     const title = formData.get("title")?.toString() ?? "";
     const description = formData.get("description")?.toString() ?? null;
     const school = formData.get("school")?.toString() ?? null;
@@ -44,59 +32,58 @@ export async function POST(req: NextRequest) {
       : null;
     const courseName = formData.get("courseName")?.toString() ?? null;
     const resourceType = formData.get("resourceType")?.toString() ?? "";
-    // assume tags were sent as a JSON string
-    const tags = formData.get("tags")
-      ? JSON.parse(formData.get("tags")!.toString())
-      : [];
     const linkedRequestId = formData.get("linkedRequestId")?.toString() ?? null;
     const email = formData.get("email")?.toString() ?? null;
 
-    // get the file
+    // Tags parsing safely
+    let tags: string[] = [];
+    try {
+      tags = formData.get("tags")
+        ? JSON.parse(formData.get("tags")!.toString())
+        : [];
+    } catch (e) {
+      console.warn("Failed to parse tags:", e);
+    }
+
+    // 2. File Validation
     const file = formData.get("file") as File;
     if (!file) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
-    // Get user from Supabase auth
+    // 3. User Resolution (Auth)
     let uploaderId: string | null = null;
-    const supabase = await createClient();
 
     try {
       const {
         data: { user },
-        error,
       } = await supabase.auth.getUser();
 
-      if (error) {
-        console.error("Auth error:", error);
-      }
-
       if (user) {
-        // Get user profile from your custom User table
-        const { data: userProfile, error: profileError } = await supabase
+        // We query the custom 'User' table to match the authId
+        // Using .maybeSingle() is safer than .single() as it doesn't throw on 0 results
+        const { data: userProfile } = await supabase
           .from("User")
           .select("id")
           .eq("authId", user.id)
-          .single();
+          .maybeSingle();
 
-        if (profileError) {
-          console.error("Profile fetch error:", profileError);
-        } else if (userProfile) {
+        if (userProfile) {
           uploaderId = userProfile.id;
         }
       }
     } catch (authError) {
       console.error("Authentication check failed:", authError);
-      // Continue as anonymous upload
     }
 
-    // generate a random filename with same extension
+    // 4. S3 Upload
     const ext = file.name.split(".").pop() ?? "bin";
     const randomName = `${randomUUID()}.${ext}`;
+    const resourceId = randomUUID();
     const key = `pending/${randomName}`;
 
-    // upload to B2
     const buffer = Buffer.from(await file.arrayBuffer());
+
     await s3.send(
       new PutObjectCommand({
         Bucket: process.env.B2_BUCKET_NAME!,
@@ -106,6 +93,7 @@ export async function POST(req: NextRequest) {
       })
     );
 
+    // 5. Generate Embedding
     let embedding: number[] | null = null;
     try {
       const resourceData: EmbeddingData = {
@@ -122,10 +110,9 @@ export async function POST(req: NextRequest) {
 
       const resourceText = createResourceText(resourceData);
       console.log(`Generating embedding for resource: ${title}`);
-      console.log(`Resource text: ${resourceText.substring(0, 100)}...`);
 
       embedding = await generateEmbedding(resourceText);
-      console.log(`✓ Successfully generated embedding for: ${title}`);
+      console.log(`✓ Generated embedding`);
     } catch (embeddingError) {
       console.error(
         `✗ Failed to generate embedding for ${title}:`,
@@ -133,9 +120,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // create DB entry with status "PENDING"
-    const resource = await db.resource.create({
-      data: {
+    // 6. Insert into Database (Single Step)
+    const { data: resource, error: insertError } = await supabase
+      .from("Resource")
+      .insert({
+        id: resourceId,
         title,
         description,
         school,
@@ -149,20 +138,19 @@ export async function POST(req: NextRequest) {
         fileUrl: key,
         status: "PENDING",
         uploaderId,
-        email
-      },
-    });
+        email,
+        embedding, // Supabase client handles number[] -> vector conversion automatically
+      })
+      .select()
+      .single();
 
-    if (embedding) {
-      await db.$executeRaw`
-        UPDATE "Resource" 
-        SET embedding = ${JSON.stringify(embedding)}::vector 
-        WHERE id = ${resource.id}
-      `;
+    if (insertError) {
+      console.error("DB Insert Error:", insertError);
+      throw new Error(insertError.message);
     }
 
     return NextResponse.json(resource, { status: 201 });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Upload + DB error:", error);
     return NextResponse.json(
       { error: "Upload or database save failed" },
