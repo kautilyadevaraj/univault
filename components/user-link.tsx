@@ -15,6 +15,29 @@ export function UserLink({
   className,
   showIcon = false,
 }: UserLinkProps) {
+  const isAnonymous = username === "Anonymous";
+
+  const content = (
+    <>
+      {showIcon && <User className="h-3 w-3" />}
+      <span className="truncate">{username}</span>
+      {!isAnonymous && <ExternalLink className="h-3 w-3" />}
+    </>
+  );
+
+  if (isAnonymous) {
+    return (
+      <span
+        className={cn(
+          "inline-flex items-center gap-1 text-muted-foreground cursor-default",
+          className
+        )}
+      >
+        {content}
+      </span>
+    );
+  }
+
   return (
     <Link
       href={`/user/${username}`}
@@ -23,9 +46,7 @@ export function UserLink({
         className
       )}
     >
-      {showIcon && <User className="h-3 w-3" />}
-      <span className="truncate">{username}</span>
-      <ExternalLink className="h-3 w-3"/>
+      {content}
     </Link>
   );
 }
