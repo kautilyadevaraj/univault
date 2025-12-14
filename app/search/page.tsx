@@ -18,6 +18,9 @@ import {
   ExternalLink,
   ChevronDown,
   ChevronUp,
+  FileVideo,
+  FileArchive,
+  ImageIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -508,6 +511,26 @@ export default function SearchPage() {
     switch (fileType.toLowerCase()) {
       case "pdf":
         return <FileText className="h-3 w-3" />;
+      case "png":
+      case "jpg":
+      case "jpeg":
+      case "gif":
+      case "webp":
+      case "svg":
+      case "bmp":
+        return <ImageIcon className="h-3 w-3" />;
+      case "mp4":
+      case "mov":
+      case "avi":
+      case "webm":
+      case "mkv":
+        return <FileVideo className="h-3 w-3" />;
+      case "zip":
+      case "rar":
+      case "7z":
+      case "tar":
+      case "gz":
+        return <FileArchive className="h-3 w-3" />;
       default:
         return <File className="h-3 w-3" />;
     }
@@ -1218,6 +1241,9 @@ export default function SearchPage() {
                       </div>
                       {(() => {
                         const url = previewUrls[previewResource.id];
+                        const fileType =
+                          previewResource.fileType?.toLowerCase();
+
                         if (!url) {
                           return (
                             <div className="p-8 text-center border rounded-lg">
@@ -1228,10 +1254,9 @@ export default function SearchPage() {
                             </div>
                           );
                         }
-                        if (
-                          previewResource.fileType &&
-                          previewResource.fileType.toLowerCase() === "pdf"
-                        ) {
+
+                        // PDF preview
+                        if (fileType === "pdf") {
                           return (
                             <iframe
                               src={url}
@@ -1239,34 +1264,100 @@ export default function SearchPage() {
                               title="PDF Preview"
                             />
                           );
-                        } else if (
-                          previewResource.fileType &&
-                          ["png", "jpg", "jpeg", "gif", "webp"].includes(
-                            previewResource.fileType.toLowerCase()
+                        }
+
+                        // Image preview
+                        if (
+                          [
+                            "png",
+                            "jpg",
+                            "jpeg",
+                            "gif",
+                            "webp",
+                            "svg",
+                            "bmp",
+                          ].includes(fileType)
+                        ) {
+                          return (
+                            <div className="border rounded-lg overflow-hidden bg-muted/30">
+                              <img
+                                src={url || "/placeholder.svg"}
+                                alt="Preview"
+                                className="w-full h-auto max-h-[500px] object-contain mx-auto"
+                              />
+                            </div>
+                          );
+                        }
+
+                        // Video preview
+                        if (
+                          ["mp4", "mov", "avi", "webm", "mkv"].includes(
+                            fileType
                           )
                         ) {
                           return (
-                            <img
-                              src={url || "/placeholder.svg"}
-                              alt="Preview"
-                              className="w-full h-64 sm:h-80 object-contain rounded-md border"
-                            />
+                            <div className="border rounded-lg overflow-hidden">
+                              <video
+                                src={url}
+                                controls
+                                className="w-full h-auto max-h-[500px] rounded-md bg-black"
+                                preload="metadata"
+                              >
+                                Your browser does not support the video tag.
+                              </video>
+                            </div>
                           );
-                        } else {
+                        }
+
+                        // Zip/Archive preview
+                        if (
+                          ["zip", "rar", "7z", "tar", "gz"].includes(fileType)
+                        ) {
                           return (
-                            <div className="p-8 text-center border rounded-lg">
-                              <File className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                            <div className="p-8 text-center border rounded-lg bg-muted/30">
+                              <FileArchive className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                              <p className="text-lg font-semibold mb-2">
+                                Archive File
+                              </p>
                               <p className="text-muted-foreground mb-4">
-                                Preview not available for this file type.
+                                This is a compressed archive file. Download to
+                                extract and view contents.
                               </p>
                               <Button
-                                onClick={() => window.open(url, "_blank")}
+                                onClick={() => handleDownload(previewResource)}
+                                disabled={
+                                  downloadingResource === previewResource.id
+                                }
                               >
-                                Open in new tab
+                                {downloadingResource === previewResource.id ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    Downloading...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Download className="h-4 w-4 mr-2" />
+                                    Download Archive
+                                  </>
+                                )}
                               </Button>
                             </div>
                           );
                         }
+
+                        // Fallback for unsupported file types
+                        return (
+                          <div className="p-8 text-center border rounded-lg">
+                            <File className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                            <p className="text-muted-foreground mb-4">
+                              Preview not available for this file type.
+                            </p>
+                            <Button onClick={() => window.open(url, "_blank")}>
+                              <ExternalLink className="h-4 w-4 mr-2" />
+                              Open in new tab
+                            </Button>
+                          </div>
+                        );
                       })()}
                     </div>
                   </div>

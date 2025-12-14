@@ -9,6 +9,9 @@ import {
   AlertCircle,
   FileText,
   Download,
+  FileArchive,
+  File,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,10 +24,8 @@ import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
@@ -97,7 +98,7 @@ export function UploadCard({
   actionLoading,
   hasUnsavedEdits = false,
 }: UploadCardProps) {
-  console.log(upload)
+  console.log(upload);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
@@ -192,7 +193,7 @@ export function UploadCard({
               {/* PREVIEW */}
               <Button
                 variant="outline"
-                className="flex-1 lg:flex-none"
+                className="flex-1 lg:flex-none bg-transparent"
                 onClick={handlePreview}
                 disabled={loadingPreview}
               >
@@ -274,12 +275,92 @@ export function UploadCard({
                   className="w-full h-60 sm:h-96 rounded-md border"
                   title="PDF Preview"
                 />
+              ) : ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"].includes(
+                  upload.fileType.toLowerCase()
+                ) ? (
+                <div className="border rounded-lg overflow-hidden bg-muted/30">
+                  <img
+                    src={previewUrl || "/placeholder.svg"}
+                    alt="preview"
+                    className="w-full h-auto max-h-[500px] object-contain mx-auto rounded-md"
+                  />
+                </div>
+              ) : ["mp4", "mov", "avi", "webm", "mkv"].includes(
+                  upload.fileType.toLowerCase()
+                ) ? (
+                <div className="border rounded-lg overflow-hidden">
+                  <video
+                    src={previewUrl}
+                    controls
+                    className="w-full h-auto max-h-[500px] rounded-md bg-black"
+                    preload="metadata"
+                  >
+                    Your browser does not support the video tag.
+                  </video>
+                </div>
+              ) : ["zip", "rar", "7z", "tar", "gz"].includes(
+                  upload.fileType.toLowerCase()
+                ) ? (
+                <div className="p-8 text-center border rounded-lg bg-muted/30">
+                  <FileArchive className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-lg font-semibold mb-2">Archive File</p>
+                  <p className="text-muted-foreground mb-4">
+                    This is a compressed archive file. Download to extract and
+                    view contents.
+                  </p>
+                  <Button onClick={handleDownload} disabled={downloading}>
+                    {downloading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Downloading...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="h-4 w-4 mr-2" />
+                        Download Archive
+                      </>
+                    )}
+                  </Button>
+                </div>
+              ) : ["pptx", "ppt"].includes(upload.fileType.toLowerCase()) ? (
+                <div className="p-8 text-center border rounded-lg bg-muted/30">
+                  <FileText className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-lg font-semibold mb-2">
+                    PowerPoint Presentation
+                  </p>
+                  <p className="text-muted-foreground mb-4">
+                    Download to view this presentation in PowerPoint or a
+                    compatible viewer.
+                  </p>
+                  <Button onClick={handleDownload} disabled={downloading}>
+                    {downloading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Downloading...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="h-4 w-4 mr-2" />
+                        Download Presentation
+                      </>
+                    )}
+                  </Button>
+                </div>
               ) : (
-                <img
-                  src={previewUrl}
-                  alt="preview"
-                  className="w-full h-64 sm:h-96 object-contain rounded-md border"
-                />
+                <div className="p-8 text-center border rounded-lg">
+                  <File className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground mb-4">
+                    Preview not available for this file type.
+                  </p>
+                  <Button
+                    onClick={() =>
+                      previewUrl && window.open(previewUrl, "_blank")
+                    }
+                  >
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    Open in new tab
+                  </Button>
+                </div>
               )}
             </div>
           </ScrollArea>
